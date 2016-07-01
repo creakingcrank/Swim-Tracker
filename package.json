@@ -1,0 +1,29 @@
+{
+    "author": "jonathan@lightcycles.co.uk",
+    "dependencies": {},
+    "keywords": [],
+    "name": "swim-tracker",
+    "pebble": {
+        "capabilities": [
+            ""
+        ],
+        "displayName": "Swim Tracker",
+        "enableMultiJS": true,
+        "messageKeys": [],
+        "projectType": "native",
+        "resources": {
+            "media": []
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk"
+        ],
+        "uuid": "7cc0001d-15a5-4bf4-9fb3-c163e868b64a",
+        "watchapp": {
+            "watchface": false
+        }
+    },
+    "version": "1.0.0"
+}
