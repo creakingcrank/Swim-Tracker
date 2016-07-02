@@ -10,6 +10,11 @@
 #define MAX_STROKE_TIME_MS 4500 /* maximum time we allow between strokes for freestyle this is twice stroke time at minimum stroke rate */
 #define MIN_STROKES_PER_LENGTH 4 /* minimum number of recorded strokes for a length to be valid */
 
+/* define constants for glide detection */
+
+#define GLIDE_X_THRESHOLD -200 /* X direction threshold for glide detection */
+#define MIN_GLIDE_TIME_MS 2000 /* Trigger a length if not stroke detected this long after glide detected */
+
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
 static int lengths =0;      //counter for lengths (a pause after several strokes means a length)
@@ -19,6 +24,12 @@ static int last_stroke_start_time = 0; //the time we last logged a stroke
 static bool up = false;     // have we logged an acceleration peak?
 static bool swimming = false; // toggle to stop fiddling with things until a stroke is counted
 static bool paused = true;  // toggled by set button
+
+static int glide_up_time = 0; //time glide acceleration first detected
+static int glide_start_time = 0; // time a glide was restered
+static bool glide_up = false; // trigger when glide acceleration registered
+static bool gliding = false; //trigger when glide registered
+static int stroke_number_at_start_of_glide = 0;
 
 time_t timer_started; // if the clock is running, this holds the the time it was started -
 int elapsed_time; //the number of seconds the clock has been running
@@ -138,8 +149,57 @@ double square(double num) {
     product = square(approx);
   }
   return approx;
+  }
+
+static void increment_lengths(void) {
+  
+  if (strokes >= MIN_STROKES_PER_LENGTH) {
+      lengths++;
+      vibes_long_pulse(); // for testing only
+      #ifdef DEBUG 
+        APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes", lengths, elapsed_time, strokes );
+      #endif
+    }
+    #ifdef DEBUG
+    else APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes recorded, restarting length");
+    #endif
+    
+    //reset everything for next length:
+    strokes = 0;
+    peaks = 0;
+    up = false;
+    swimming = false;
+    gliding = false;
+    prev_up_time = up_time;
+    update_main_display();
 }
 
+static void detect_glide(int x_accel, int timestamp) {
+  
+  if ((x_accel < GLIDE_X_THRESHOLD) && (!glide_up)) {
+    glide_up = true;
+    glide_up_time = timestamp;  
+  }
+  
+  
+  if ((x_accel > GLIDE_X_THRESHOLD) && (glide_up)) {
+    glide_up = false;
+    if ((timestamp - glide_up_time) > MIN_PEAK_TIME_MS) {
+      glide_start_time = timestamp;
+      gliding = true;
+      stroke_number_at_start_of_glide = strokes;
+    }
+  }
+  
+  if (strokes > stroke_number_at_start_of_glide) gliding = false;
+  
+  if ( (gliding) && ( (timestamp-glide_start_time) > MIN_GLIDE_TIME_MS)) {
+    #ifdef DEBUG
+      APP_LOG(APP_LOG_LEVEL_INFO, "Glide triggering length check at %ds",elapsed_time);
+      #endif
+    increment_lengths();
+  }
+}
 static void count_strokes(int accel, int timestamp) {
   
   /*
@@ -194,24 +254,10 @@ static void count_strokes(int accel, int timestamp) {
   
   
   if ( ( (timestamp - last_stroke_start_time) > MAX_STROKE_TIME_MS) && (strokes > 0  ) ) {
-    if (strokes >= MIN_STROKES_PER_LENGTH) {
-      lengths++;
-      vibes_long_pulse(); // for testing only
-      #ifdef DEBUG 
-        APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes", lengths, elapsed_time, strokes );
-      #endif
-    }
     #ifdef DEBUG
-    else APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes recorded, restarting length");
+      APP_LOG(APP_LOG_LEVEL_INFO, "No strokes detected, triggering length check at %ds", elapsed_time);
     #endif
-    
-    //reset everything for next length:
-    strokes = 0;
-    peaks = 0;
-    up = false;
-    swimming = false;
-    prev_up_time = up_time;
-    update_main_display();
+    increment_lengths();
   }
 }
 
@@ -277,6 +323,7 @@ if (!accel.did_vibrate) { //ignore readings polluted by vibes (1st few always ar
   
   total_acc = get_sqrt(square(accel.x)+square(accel.y)+square(accel.z)); //calculate overall acc using pythagoras
   count_strokes(total_acc, current_time);  // call the stroke count function
+  detect_glide(accel.x,current_time); // call the glide detection function
 
 }
 
