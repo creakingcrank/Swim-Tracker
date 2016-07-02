@@ -1,7 +1,7 @@
 #include <pebble.h>
 #include "main_window.h"
 
-#define DEBUG /* debugging code */
+/* #define DEBUG  debugging code */
 
 #define ACCEL_STEP_MS 20         /* frequency of accelerometer checks */
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
@@ -17,7 +17,7 @@ static int up_time = 0;     // time current peak started, to discount short peak
 static int prev_up_time = 0; // measure overall stroke time from beginning of 1st peak
 static int last_stroke_start_time = 0; //the time we last logged a stroke
 static bool up = false;     // have we logged an acceleration peak?
-static bool swimming = false; // toggle to stop fiddling with things until a stroke is counted ** a better name would be "!swimming"
+static bool swimming = false; // toggle to stop fiddling with things until a stroke is counted
 static bool paused = true;  // toggled by set button
 
 time_t timer_started; // if the clock is running, this holds the the time it was started -
@@ -42,6 +42,8 @@ Stroke rate - keep a running total of all strokes in session, divide that by swi
 Interval count.
 
 Interval recording (distance, time, strokes)
+
+--Learning: Track stroke rate and adjust max stroke time accoringly (? 2 x average stroke time )
 
 
 
@@ -152,7 +154,6 @@ static void count_strokes(int accel, int timestamp) {
   
   */
   
-  
   if ((accel > ACC_THRESHOLD) && (up == false)) { //record the start of an acc peak
       up = true;
       prev_up_time = up_time;
@@ -200,10 +201,16 @@ static void count_strokes(int accel, int timestamp) {
         APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes", lengths, elapsed_time, strokes );
       #endif
     }
+    #ifdef DEBUG
+    else APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes recorded, restarting length");
+    #endif
+    
+    //reset everything for next length:
     strokes = 0;
     peaks = 0;
     up = false;
     swimming = false;
+    prev_up_time = up_time;
     update_main_display();
   }
 }
