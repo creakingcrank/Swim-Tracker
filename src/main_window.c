@@ -19,7 +19,8 @@ static int ave_peak_to_peak_time_ms = 2500; // average time between peaks
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
-static int lengths =0;      //counter for lengths (a pause pr a glide after several strokes means a length)
+static int lengths =0;    //counter for lengths (a pause pr a glide after several strokes means a length)
+static int lengths_in_interval = 0; // count lengths since last clock trigger
 static int up_time = 0;     // time current peak started, to discount short peaks from measurement
 static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
 static bool up = false;     // have we logged an acceleration peak?
@@ -158,6 +159,7 @@ static void increment_lengths(void) {
   
   if (strokes >= MIN_STROKES_PER_LENGTH) { //If we haven't done MIN_STROKES_PER_LENGTH, we assume length aborted or noisy data 
       lengths++;
+      lengths_in_interval++;
       vibes_long_pulse(); // for testing only
       length_elapsed_time = time(NULL) - length_timer_started; // the number of seconds in that last length
       swimming_elapsed_time = swimming_elapsed_time + length_elapsed_time; // number of seconds we have been swimming
@@ -250,7 +252,7 @@ static void update_elapsed_time_display(){
   
   static char lengths_text_to_display [8];
   static char strokes_text_to_display [12];
-  int pace = (swimming_elapsed_time/lengths)*(100/pool_length[current_pool_length]); // pace of last interval in s/100m, ignoring rest time
+  int pace = (swimming_elapsed_time/lengths_in_interval)*(100/pool_length[current_pool_length]); // pace of last interval in s/100m, ignoring rest time
  
  // define the text to display in the main text layer:  
    if  ( main_display_setting == 0) {
@@ -319,6 +321,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
   if (!paused){
     timer_started = time(NULL);
     swimming_elapsed_time = 0; // reset swimming elapsed time so pace shows pace of last interval, more useful?
+    lengths_in_interval = 0;
     update_elapsed_time_display();
   }
   else {
