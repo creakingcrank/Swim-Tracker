@@ -51,19 +51,9 @@ THINGS TO DO
 Automatic intervals?? define a maximum turn time of, say 10 seconds, 
 if we don't see a stroke in that time, switch resting on. 
 
-
-
-
 Interval count.
 
 Interval recording (distance, time, strokes)
-
---Learning: Track stroke rate and adjust max stroke time accordingly (? 2 x average stroke time ) ** not necessary if glide detection proves reliable...
-
-
-
-
-
 
 
  */
@@ -220,7 +210,7 @@ update_main_display();
   
   if ( ((timestamp - last_peak_time) > (2 * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
     #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Missing peak detected, triggering length check at %ds", elapsed_time);
+      APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
     #endif
     increment_lengths();
   }
@@ -358,7 +348,7 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
       text_layer_set_text(l_text, "Pace");
       break;
     case 3 :
-      text_layer_set_text(l_text, "Str rate");
+      text_layer_set_text(l_text, "Str. rate");
       break;
   }
   update_main_display();
