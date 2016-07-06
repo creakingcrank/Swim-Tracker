@@ -1,12 +1,11 @@
 #include <pebble.h>
 #include "main_window.h"
 
- /* #define DEBUG debugging code */
+ #define DEBUG  /* debugging code */
 
 #define ACCEL_STEP_MS 20         /* frequency of accelerometer checks */
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
 #define STROKE_MIN_PEAK_TIME_MS 100     /* minimim duration of peak to count it */
-#define MAX_STROKE_TIME_MS 5000 /* maximum time we allow between strokes, for freestyle this is twice stroke time at minimum stroke rate */
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid */
 
 /* define constants for glide detection */
@@ -15,21 +14,18 @@
 #define MIN_GLIDE_TIME_MS 1700 /* Trigger a length if no stroke detected this long after glide registered */
 #define GLIDE_MIN_PEAK_TIME_MS 400 /* minimum duration of glide to count it */
 
+static int ave_peak_to_peak_time_ms = 2500; // average time between peaks
+
+
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
 static int lengths =0;      //counter for lengths (a pause pr a glide after several strokes means a length)
 static int up_time = 0;     // time current peak started, to discount short peaks from measurement
-static int prev_up_time = 0; // measure overall stroke time from beginning of 1st peak
-static int last_stroke_start_time = 0; //the time we last logged a stroke
+static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
 static bool up = false;     // have we logged an acceleration peak?
 static bool swimming = false; // toggle to stop fiddling with things until a stroke is counted
 static bool paused = true;  // toggled by set button
 
-static int glide_up_time = 0; //time glide acceleration first detected to discount short peaks from measurement
-static int glide_start_time = 0; // time a glide was registered, to measure glide duration
-static bool glide_up = false; // trigger when glide acceleration detected
-static bool gliding = false; //trigger when glide registered
-static int stroke_number_at_start_of_glide = 0; // compare this with current stroke count to spot when a stroke terminates a glide
 
 time_t timer_started = 0; // if the clock is running, this holds the the time it was started -
 int elapsed_time = 0; //the number of seconds the clock has been running
@@ -37,8 +33,6 @@ int elapsed_time = 0; //the number of seconds the clock has been running
 time_t length_timer_started = 0; // the time we start registering swimming in a length, for stroke rate etc.
 int length_elapsed_time = 0; // the elapsed length time;
 int swimming_elapsed_time = 0; // cumulative length time for interval - reset when timer reset, used for pace calculation
-
-int stroke_rate_last_length = 0; // number of strokes in length / length elapsed time
 
 static int pool_length[] = {25, 33, 50};
 static int number_of_pool_lengths = sizeof(pool_length)/sizeof(pool_length[0]);
@@ -167,7 +161,6 @@ static void increment_lengths(void) {
       vibes_long_pulse(); // for testing only
       length_elapsed_time = time(NULL) - length_timer_started; // the number of seconds in that last length
       swimming_elapsed_time = swimming_elapsed_time + length_elapsed_time; // number of seconds we have been swimming
-      stroke_rate_last_length = 60 * strokes / length_elapsed_time; // this for the stroke rate display
       #ifdef DEBUG 
         APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes", lengths, elapsed_time, strokes );
       #endif
@@ -181,97 +174,55 @@ static void increment_lengths(void) {
     peaks = 0;
     up = false;
     swimming = false;
-    gliding = false;
-    glide_up = false;
-    prev_up_time = up_time;
     update_main_display();
 }
 
-static void detect_glide(int x_accel, int timestamp) {
-  
-  if ((x_accel < GLIDE_X_THRESHOLD) && (!glide_up)) { //Gide acceleration is in negative x direction so peak is less than threshhold
-    glide_up = true;
-    glide_up_time = timestamp;  
-  }
-  
-  
-  if ((x_accel > GLIDE_X_THRESHOLD) && (glide_up)) {
-    glide_up = false;
-    if ((timestamp - glide_up_time) > GLIDE_MIN_PEAK_TIME_MS) { //register glide if the acceleration was long enough
-      glide_start_time = timestamp;
-      gliding = true;
-      stroke_number_at_start_of_glide = strokes;
-      peaks = 1; // experimental, this should bring the stroke counter back into sync to prevent early length termination when slow stroking.
-      #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Glide detected with peak duration %dms",timestamp - glide_up_time);
-      #endif
-    }
-  }
-  
-  if (strokes > stroke_number_at_start_of_glide) gliding = false; //if a new stroke was detected, the glide has stopped
-  
-  if ( (gliding) && ( (timestamp-glide_start_time) > MIN_GLIDE_TIME_MS)) { //if gliding has gone on long enough without a stroke, trigger a length check
-    #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Glide triggering length check at %ds",elapsed_time);
-      #endif
-    increment_lengths();
-  }
-}
 static void count_strokes(int accel, int timestamp) {
   
   /*
   
   Here's the algorithm: 
   
-  A stroke has two acceleration peaks in quick succession (up and down or out and back)
+  A stroke has two acceleration peaks in quick succession (up and down or out and back) (strokes = peaks /2)
   We count a peak if accel stays above ACC_THRESHOLD for longer than MIN_PEAK_TIME
-  Once we've seen two peaks, we increment the stroke count
-  If we don't see another peak for MAX_STROKE_TIME after the start of the first peak, 
-  we increment the length count
+  For each length, we track the average time between peaks.
+  If we don't see another peak for 2 * that average we call the increment lengths function
   
   
   */
   
   if ((accel > ACC_THRESHOLD) && (up == false)) { //record the start of an acc peak
       up = true;
-      prev_up_time = up_time;
       up_time = timestamp;
     }
   
   if ( (accel < ACC_THRESHOLD) && (up == true) )  { //identify the end of an acc peak
     up = false;
     if (timestamp-up_time > STROKE_MIN_PEAK_TIME_MS) {
+      if (peaks > 2)  ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * peaks)+(timestamp-last_peak_time))/(peaks+1); //ignore first couple of peaks in case noisy
+      
+      last_peak_time = timestamp;
       peaks++; //if the peak was long enough, log it
+      if (peaks == 1) length_timer_started=time(NULL);
       #ifdef DEBUG
-        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds", peaks, timestamp-up_time, elapsed_time);
+        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, ap2p %dms", peaks, timestamp-up_time, elapsed_time, strokes, ave_peak_to_peak_time_ms);
       #endif
       update_main_display(); // this basically for debug so we can see peak tracking on screen
-     if (peaks == 1) up_time = prev_up_time; // measure stroke time from first acc peak
     }
   }    
  
-  
- if (peaks == 2 ) {
-    peaks = 0;
-   if (strokes == 0) length_timer_started = time(NULL); // start the length timer if this is the first regiestered stroke
-    strokes++;
-    #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Stroke %d recorded at %ds, duration %dms", strokes, elapsed_time,timestamp-prev_up_time);
-    #endif
-    swimming = true;
-    last_stroke_start_time = prev_up_time;
+strokes = peaks / 2;
    
-    update_main_display();
-  }
+update_main_display();
+
   
-  
-  
-  if ( ( (timestamp - last_stroke_start_time) > MAX_STROKE_TIME_MS) && (strokes > 0  ) ) {
+  if ( ((timestamp - last_peak_time) > (2 * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
     #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "No strokes detected, triggering length check at %ds", elapsed_time);
+      APP_LOG(APP_LOG_LEVEL_INFO, "Missing peak detected, triggering length check at %ds", elapsed_time);
     #endif
     increment_lengths();
   }
+
 }
 
 static void update_elapsed_time_display(){
@@ -312,7 +263,7 @@ if ( main_display_setting == 2) {
   snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
 }
 if ( main_display_setting == 3) {
-  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", stroke_rate_last_length); 
+  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", ave_peak_to_peak_time_ms*120/1000); 
 }   
  
 // Display that text:  
@@ -321,11 +272,8 @@ text_layer_set_text(lengths_layer,lengths_text_to_display);
 
 // Next section really for debug, provide some info on strokes counted etc. :
    
-if (gliding) text_layer_set_text(strokes_layer,"G");
-else {
-  snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d.%d str", strokes, peaks);
+  snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d str", strokes);
   text_layer_set_text(strokes_layer,strokes_text_to_display);
-}
 
 }
 
@@ -349,7 +297,7 @@ if (!accel.did_vibrate) { //ignore readings polluted by vibes (1st few always ar
   
   total_acc = get_sqrt(square(accel.x)+square(accel.y)+square(accel.z)); //calculate overall acc using pythagoras
   count_strokes(total_acc, current_time);  // call the stroke count function
-  detect_glide(accel.x,current_time); // call the glide detection function
+ // detect_glide(accel.x,current_time); // call the glide detection function
 
 }
 
