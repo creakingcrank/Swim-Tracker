@@ -263,7 +263,7 @@ if ( main_display_setting == 2) {
   snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
 }
 if ( main_display_setting == 3) {
-  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", ave_peak_to_peak_time_ms*120/1000); 
+  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", 30000/ave_peak_to_peak_time_ms); 
 }   
  
 // Display that text:  
