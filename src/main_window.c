@@ -16,6 +16,8 @@
 
 static int ave_peak_to_peak_time_ms = 2500; // average time between peaks
 
+static int missing_peak_sens = 3; // number of peak gaps we wait before a length check. (tried 2, too sensitive)
+
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
@@ -208,7 +210,7 @@ strokes = peaks / 2;
 update_main_display();
 
   
-  if ( ((timestamp - last_peak_time) > (2 * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
+  if ( ((timestamp - last_peak_time) > (missing_peak_sens * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
     #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
     #endif
