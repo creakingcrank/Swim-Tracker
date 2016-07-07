@@ -103,7 +103,7 @@ static void initialise_ui(void) {
   
   // l_text
   l_text = text_layer_create(GRect(0, 11, 145, 34));
-  text_layer_set_text(l_text, "Lengths");
+  text_layer_set_text(l_text, "Len. w");
   text_layer_set_text_alignment(l_text, GTextAlignmentCenter);
   text_layer_set_font(l_text, s_res_bitham_30_black);
   layer_add_child(window_get_root_layer(s_window), (Layer *)l_text);
@@ -248,13 +248,19 @@ static void update_elapsed_time_display(){
    if  ( main_display_setting == 0) {
     snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", lengths);
   }
- if ( main_display_setting == 1) {
+    if ( main_display_setting == 1) {
     snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", lengths*pool_length[current_pool_length]);
   }
-if ( main_display_setting == 2) {
+   if  ( main_display_setting == 2) {
+    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", lengths_in_interval);
+  }
+  if ( main_display_setting == 3) {
+    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", lengths_in_interval*pool_length[current_pool_length]);
+  } 
+if ( main_display_setting == 4) {
   snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
 }
-if ( main_display_setting == 3) {
+if ( main_display_setting == 5) {
   snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", 30000/ave_peak_to_peak_time_ms); 
 }   
  
@@ -335,19 +341,25 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
   }
   
   main_display_setting++;
-  if (main_display_setting > 3) main_display_setting = 0;
+  if (main_display_setting > 5) main_display_setting = 0;
   
   switch (main_display_setting) {
     case 0 :
-      text_layer_set_text(l_text, "Lengths");
+      text_layer_set_text(l_text, "Len. w");
       break;
     case 1 :
-      text_layer_set_text(l_text, "Distance");
+      text_layer_set_text(l_text, "Dist. w");
       break;
     case 2 :
-      text_layer_set_text(l_text, "Pace");
+      text_layer_set_text(l_text, "Len. i");
       break;
-    case 3 :
+     case 3 :
+      text_layer_set_text(l_text, "Dist. i");
+      break;
+    case 4 :
+      text_layer_set_text(l_text, "Pace i");
+      break;
+    case 5 :
       text_layer_set_text(l_text, "Str. rate");
       break;
   }
