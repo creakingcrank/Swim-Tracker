@@ -16,6 +16,8 @@
 
 static int ave_peak_to_peak_time_ms = 2500; // average time between peaks
 
+static int missing_peak_sens = 3; // number of peak gaps we wait before a length check. (tried 2, too sensitive)
+
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
@@ -68,6 +70,7 @@ static TextLayer *strokes_layer;
 static TextLayer *stopwatch_layer;
 static TextLayer *l_text;
 static TextLayer *pool_layer;
+static TextLayer *intervals_layer;
 
 static void initialise_ui(void) {
   s_window = window_create();
@@ -86,8 +89,8 @@ static void initialise_ui(void) {
   layer_add_child(window_get_root_layer(s_window), (Layer *)lengths_layer);
   
   // strokes_layer
-  strokes_layer = text_layer_create(GRect(70, 130, 65, 30));
-  text_layer_set_text(strokes_layer, "0.0 str");
+  strokes_layer = text_layer_create(GRect(90, 130, 53, 30));
+  text_layer_set_text(strokes_layer, "0 str");
   text_layer_set_text_alignment(strokes_layer, GTextAlignmentRight);
   text_layer_set_font(strokes_layer, s_res_gothic_28_bold);
   layer_add_child(window_get_root_layer(s_window), (Layer *)strokes_layer);
@@ -103,16 +106,23 @@ static void initialise_ui(void) {
   
   // l_text
   l_text = text_layer_create(GRect(0, 11, 145, 34));
-  text_layer_set_text(l_text, "Len. w");
+  text_layer_set_text(l_text, "Lengths");
   text_layer_set_text_alignment(l_text, GTextAlignmentCenter);
   text_layer_set_font(l_text, s_res_bitham_30_black);
   layer_add_child(window_get_root_layer(s_window), (Layer *)l_text);
   
   // pool_layer
-  pool_layer = text_layer_create(GRect(5, 130, 60, 30));
+  pool_layer = text_layer_create(GRect(0, 130, 40, 30));
   text_layer_set_text(pool_layer, "25m");
   text_layer_set_font(pool_layer, s_res_gothic_28_bold);
   layer_add_child(window_get_root_layer(s_window), (Layer *)pool_layer);
+  
+  // intervals_layer
+  intervals_layer = text_layer_create(GRect(45, 130, 45, 30));
+  text_layer_set_text(intervals_layer, "w");
+  text_layer_set_text_alignment(intervals_layer, GTextAlignmentCenter);
+  text_layer_set_font(intervals_layer, s_res_gothic_28_bold);
+  layer_add_child(window_get_root_layer(s_window), (Layer *)intervals_layer);
 }
 
 static void destroy_ui(void) {
@@ -122,6 +132,7 @@ static void destroy_ui(void) {
   text_layer_destroy(stopwatch_layer);
   text_layer_destroy(l_text);
   text_layer_destroy(pool_layer);
+  text_layer_destroy(intervals_layer);
 }
 // END AUTO-GENERATED UI CODE
 
@@ -178,10 +189,12 @@ static void count_strokes(int accel, int timestamp) {
   A stroke has two acceleration peaks in quick succession (up and down or out and back) (strokes = peaks /2)
   We count a peak if accel stays above ACC_THRESHOLD for longer than MIN_PEAK_TIME
   For each length, we track the average time between peaks.
-  If we don't see another peak for 2 * that average we call the increment lengths function
+  If we don't see another peak for missing_peak_sense * that average we call the increment lengths function
   
   
   */
+  
+ static int latest_peak_to_peak_time;
   
   if ((accel > ACC_THRESHOLD) && (up == false)) { //record the start of an acc peak
       up = true;
@@ -191,8 +204,10 @@ static void count_strokes(int accel, int timestamp) {
   if ( (accel < ACC_THRESHOLD) && (up == true) )  { //identify the end of an acc peak
     up = false;
     if (timestamp-up_time > STROKE_MIN_PEAK_TIME_MS) {
-      if (peaks > 2)  ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * peaks)+(timestamp-last_peak_time))/(peaks+1); //ignore first couple of peaks in case noisy
-      
+      if (peaks > 2) {
+        latest_peak_to_peak_time = timestamp - last_peak_time;
+        ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time  )/peaks; //ignore first couple of peaks in case noisy
+      }
       last_peak_time = timestamp;
       peaks++; //if the peak was long enough, log it
       if (peaks == 1) length_timer_started=time(NULL);
@@ -208,9 +223,9 @@ strokes = peaks / 2;
 update_main_display();
 
   
-  if ( ((timestamp - last_peak_time) > (2 * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
+  if ( ((timestamp - last_peak_time) > (missing_peak_sens * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
     #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
+      APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
     #endif
     increment_lengths();
   }
@@ -233,7 +248,10 @@ static void update_elapsed_time_display(){
    text_layer_set_background_color(stopwatch_layer, GColorBlack);
    text_layer_set_text_color(stopwatch_layer, GColorWhite);
   }
-  snprintf(time_to_display,sizeof(time_to_display),"%01d:%02d:%02d",elapsed_time / 3600, (elapsed_time / 60) % 60, elapsed_time  % 60 );
+  
+  // if you are watching overall data, show workout time, else show interval time
+  if (main_display_setting < 2) snprintf(time_to_display,sizeof(time_to_display),"%01d:%02d:%02d",elapsed_time / 3600, (elapsed_time / 60) % 60, elapsed_time  % 60 );
+  else snprintf(time_to_display,sizeof(time_to_display),"%01d:%02d:%02d",swimming_elapsed_time / 3600, (swimming_elapsed_time / 60) % 60, swimming_elapsed_time  % 60 );
   text_layer_set_text(stopwatch_layer, time_to_display);
   
 }
@@ -268,10 +286,11 @@ if ( main_display_setting == 5) {
    
 text_layer_set_text(lengths_layer,lengths_text_to_display);
 
-// Next section really for debug, provide some info on strokes counted etc. :
-   
-  snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d str", strokes);
-  text_layer_set_text(strokes_layer,strokes_text_to_display);
+// Display number of stokes - hold at last length until next length underway
+  if (strokes > MIN_STROKES_PER_LENGTH) {
+    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d str", strokes);
+    text_layer_set_text(strokes_layer,strokes_text_to_display);
+  }
 
 }
 
@@ -345,25 +364,32 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
   
   switch (main_display_setting) {
     case 0 :
-      text_layer_set_text(l_text, "Len. w");
+      text_layer_set_text(l_text, "Lengths");
+      text_layer_set_text(intervals_layer, "w");
       break;
     case 1 :
-      text_layer_set_text(l_text, "Dist. w");
+      text_layer_set_text(l_text, "Distance");
+      text_layer_set_text(intervals_layer, "w");
       break;
     case 2 :
-      text_layer_set_text(l_text, "Len. i");
+      text_layer_set_text(l_text, "Lengths");
+      text_layer_set_text(intervals_layer, "i");
       break;
      case 3 :
-      text_layer_set_text(l_text, "Dist. i");
+      text_layer_set_text(l_text, "Distance");
+      text_layer_set_text(intervals_layer, "i");
       break;
     case 4 :
-      text_layer_set_text(l_text, "Pace i");
+      text_layer_set_text(l_text, "Pace");
+      text_layer_set_text(intervals_layer, "i");
       break;
     case 5 :
-      text_layer_set_text(l_text, "Str. rate");
+      text_layer_set_text(l_text, "str/min");
+      text_layer_set_text(intervals_layer, "l");
       break;
   }
   update_main_display();
+  update_elapsed_time_display();
  
 }
 
