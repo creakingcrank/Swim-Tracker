@@ -7,6 +7,7 @@
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
 #define STROKE_MIN_PEAK_TIME_MS 100     /* minimim duration of peak to count it */
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid */
+#define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
 
 /* define constants for glide detection */
 
@@ -22,6 +23,7 @@ static int missing_peak_sens = 3; // number of peak gaps we wait before a length
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
 static int lengths =0;    //counter for lengths (a pause pr a glide after several strokes means a length)
+static int intervals = 0; // counter for intervals
 static int lengths_in_interval = 0; // count lengths since last clock trigger
 static int up_time = 0;     // time current peak started, to discount short peaks from measurement
 static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
@@ -34,6 +36,7 @@ time_t timer_started = 0; // if the clock is running, this holds the the time it
 int elapsed_time = 0; //the number of seconds the clock has been running
 
 time_t length_timer_started = 0; // the time we start registering swimming in a length, for stroke rate etc.
+time_t end_of_last_length = 0; // time last length ended for auto intervel detection
 int length_elapsed_time = 0; // the elapsed length time;
 int swimming_elapsed_time = 0; // cumulative length time for interval - reset when timer reset, used for pace calculation
 
@@ -50,11 +53,9 @@ static int main_display_setting = 0; // what we show on the main screen
 
 THINGS TO DO
 
-Automatic intervals?? define a maximum turn time of, say 10 seconds, 
-if we don't see a stroke in that time, switch resting on. 
-
-Interval count.
-
+Check Auto Interval implementation - especially what is displayed and when.
+Add Interval count to display.
+Think about UI controls. Do you need manual interval control etc.
 Interval recording (distance, time, strokes)
 
 
@@ -164,6 +165,7 @@ static void increment_lengths(void) {
       vibes_long_pulse(); // for testing only
       length_elapsed_time = time(NULL) - length_timer_started; // the number of seconds in that last length
       swimming_elapsed_time = swimming_elapsed_time + length_elapsed_time; // number of seconds we have been swimming
+      end_of_last_length = time(NULL);
       #ifdef DEBUG 
         APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes", lengths, elapsed_time, strokes );
       #endif
@@ -222,12 +224,22 @@ strokes = peaks / 2;
    
 update_main_display();
 
+  // check for end of length
   
   if ( ((timestamp - last_peak_time) > (missing_peak_sens * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
     #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
     #endif
     increment_lengths();
+  }
+  
+  // check for end of interval
+  
+  if (((time(NULL) -  end_of_last_length) > TRIGGER_AUTO_INTERVAL_AFTER_S) && (lengths_in_interval>0) && (peaks==0)) {
+    intervals++;
+    swimming_elapsed_time = 0;
+    lengths_in_interval = 0; 
+    vibes_short_pulse(); // for testing only
   }
 
 }
@@ -288,7 +300,7 @@ text_layer_set_text(lengths_layer,lengths_text_to_display);
 
 // Display number of stokes - hold at last length until next length underway
   if (strokes > MIN_STROKES_PER_LENGTH) {
-    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d str", strokes);
+    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%dst", strokes);
     text_layer_set_text(strokes_layer,strokes_text_to_display);
   }
 
@@ -335,6 +347,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
   
   if (!paused){
     timer_started = time(NULL);
+    intervals++;
     swimming_elapsed_time = 0; // reset swimming elapsed time so pace shows pace of last interval, more useful?
     lengths_in_interval = 0;
     update_elapsed_time_display();
