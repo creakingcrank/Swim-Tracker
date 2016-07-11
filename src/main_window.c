@@ -9,16 +9,11 @@
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid */
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
 
-/* define constants for glide detection */
+// define constants for missing stroke detection
+#define MAX_AVE_PEAK_TO_PEAK_TIME_MS 2500 // the initial, and maximum allowed, average time between peaks
+#define MISSING_PEAK_SENS 5/2 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
 
-#define GLIDE_X_THRESHOLD -200 /* X direction threshold for glide detection */
-#define MIN_GLIDE_TIME_MS 1700 /* Trigger a length if no stroke detected this long after glide registered */
-#define GLIDE_MIN_PEAK_TIME_MS 400 /* minimum duration of glide to count it */
-
-static int ave_peak_to_peak_time_ms = 2500; // average time between peaks
-
-static int missing_peak_sens = 3; // number of peak gaps we wait before a length check. (tried 2, too sensitive)
-
+static int ave_peak_to_peak_time_ms = MAX_AVE_PEAK_TO_PEAK_TIME_MS; // Average time between acceleration peaks, learned during swim
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
@@ -206,9 +201,10 @@ static void count_strokes(int accel, int timestamp) {
   if ( (accel < ACC_THRESHOLD) && (up == true) )  { //identify the end of an acc peak
     up = false;
     if (timestamp-up_time > STROKE_MIN_PEAK_TIME_MS) {
-      if (peaks > 2) {
+      if (strokes > MIN_STROKES_PER_LENGTH) { // this used to be if (peaks > 2)
         latest_peak_to_peak_time = timestamp - last_peak_time;
         ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time  )/peaks; //ignore first couple of peaks in case noisy
+        if (ave_peak_to_peak_time_ms > MAX_AVE_PEAK_TO_PEAK_TIME_MS) ave_peak_to_peak_time_ms = MAX_AVE_PEAK_TO_PEAK_TIME_MS; // if avep2p gets too big, cap it.
       }
       last_peak_time = timestamp;
       peaks++; //if the peak was long enough, log it
@@ -226,7 +222,7 @@ update_main_display();
 
   // check for end of length
   
-  if ( ((timestamp - last_peak_time) > (missing_peak_sens * ave_peak_to_peak_time_ms)) && (strokes > 1)) {
+  if ( ((timestamp - last_peak_time) > (ave_peak_to_peak_time_ms * MISSING_PEAK_SENS)) && (strokes > 1)) {
     #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
     #endif
@@ -300,7 +296,8 @@ text_layer_set_text(lengths_layer,lengths_text_to_display);
 
 // Display number of stokes - hold at last length until next length underway
   if (strokes > MIN_STROKES_PER_LENGTH) {
-    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%dst", strokes);
+   // snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%dst", strokes);
+    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d", ave_peak_to_peak_time_ms); // this for testing...
     text_layer_set_text(strokes_layer,strokes_text_to_display);
   }
 
@@ -365,7 +362,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle main display
   
-  if (!paused) { // if button pressed while clock running, used to correct length recording errors.
+  if (!paused) { // if button pressed while clock running, used to correct length recording errors. ** GET RID OF THIS?
     lengths--;
     if (lengths<0) lengths = 0;
     update_main_display();
@@ -409,7 +406,7 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle pool length
   static char pool_text_to_display [5]; 
   
-  if (!paused) { // if button pressed while clock running, used to correct length recording errors.
+  if (!paused) { // if button pressed while clock running, used to correct length recording errors. ** Get rid of this?
     lengths++;
     update_main_display();
     return;
