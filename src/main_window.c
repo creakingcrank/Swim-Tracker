@@ -5,13 +5,13 @@
 
 #define ACCEL_STEP_MS 20         /* frequency of accelerometer checks */
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
-#define STROKE_MIN_PEAK_TIME_MS 100     /* minimim duration of peak to count it */
+#define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid */
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
 
 // define constants for missing stroke detection
 #define MAX_AVE_PEAK_TO_PEAK_TIME_MS 2500 // the initial, and maximum allowed, average time between peaks
-#define MISSING_PEAK_SENS 5/2 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
+#define MISSING_PEAK_SENS 9/4 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
 
 static int ave_peak_to_peak_time_ms = MAX_AVE_PEAK_TO_PEAK_TIME_MS; // Average time between acceleration peaks, learned during swim
 
@@ -191,7 +191,7 @@ static void count_strokes(int accel, int timestamp) {
   
   */
   
- static int latest_peak_to_peak_time;
+ static int latest_peak_to_peak_time_ms;
   
   if ((accel > ACC_THRESHOLD) && (up == false)) { //record the start of an acc peak
       up = true;
@@ -201,16 +201,21 @@ static void count_strokes(int accel, int timestamp) {
   if ( (accel < ACC_THRESHOLD) && (up == true) )  { //identify the end of an acc peak
     up = false;
     if (timestamp-up_time > STROKE_MIN_PEAK_TIME_MS) {
+      
+      latest_peak_to_peak_time_ms = timestamp - last_peak_time;
+      
       if (strokes > MIN_STROKES_PER_LENGTH) { // this used to be if (peaks > 2)
-        latest_peak_to_peak_time = timestamp - last_peak_time;
-        ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time  )/peaks; //ignore first couple of peaks in case noisy
+        
+        ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time_ms  )/peaks; 
+        
         if (ave_peak_to_peak_time_ms > MAX_AVE_PEAK_TO_PEAK_TIME_MS) ave_peak_to_peak_time_ms = MAX_AVE_PEAK_TO_PEAK_TIME_MS; // if avep2p gets too big, cap it.
       }
+      
       last_peak_time = timestamp;
       peaks++; //if the peak was long enough, log it
       if (peaks == 1) length_timer_started=time(NULL);
       #ifdef DEBUG
-        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, ap2p %dms", peaks, timestamp-up_time, elapsed_time, strokes, ave_peak_to_peak_time_ms);
+        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms", peaks, timestamp-up_time, elapsed_time, strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms);
       #endif
       update_main_display(); // this basically for debug so we can see peak tracking on screen
     }
@@ -222,7 +227,7 @@ update_main_display();
 
   // check for end of length
   
-  if ( ((timestamp - last_peak_time) > (ave_peak_to_peak_time_ms * MISSING_PEAK_SENS)) && (strokes > 1)) {
+  if ( ((timestamp - last_peak_time) > (ave_peak_to_peak_time_ms * MISSING_PEAK_SENS)) && (peaks > 1)) {
     #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
     #endif
@@ -236,6 +241,9 @@ update_main_display();
     swimming_elapsed_time = 0;
     lengths_in_interval = 0; 
     vibes_short_pulse(); // for testing only
+     #ifdef DEBUG
+      APP_LOG(APP_LOG_LEVEL_INFO, "Interval triggered at %ds", elapsed_time);
+    #endif
   }
 
 }
