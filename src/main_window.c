@@ -6,15 +6,16 @@
 #define ACCEL_STEP_MS 20         /* frequency of accelerometer checks */
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
 #define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
-#define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid */
+#define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid, current used in a display function only */ 
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
+#define INITIAL_AVE_STROKES_PER_LENGTH 5 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
 
 // define constants for missing stroke detection
 #define MAX_AVE_PEAK_TO_PEAK_TIME_MS 2500 // the initial, and maximum allowed, average time between peaks
 #define MISSING_PEAK_SENS 9/4 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
 
 static int ave_peak_to_peak_time_ms = 1000; // Average time between acceleration peaks, learned during swim 
-static int ave_strokes_per_length = 10; // Avergae number of strokes per length, learned during swim
+static int ave_strokes_per_length = INITIAL_AVE_STROKES_PER_LENGTH; // Avergae number of strokes per length, learned during swim
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
@@ -255,6 +256,7 @@ update_main_display();
     intervals++;
     swimming_elapsed_time = 0;
     lengths_in_interval = 0; 
+    ave_strokes_per_length = INITIAL_AVE_STROKES_PER_LENGTH; // reset avergae strokes per length to account for stroke change - don't like this, since not good for medley swimmers...
     vibes_short_pulse(); // for testing only
      #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Interval triggered at %ds", elapsed_time);
