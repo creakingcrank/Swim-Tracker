@@ -14,6 +14,7 @@
 #define MISSING_PEAK_SENS 9/4 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
 
 static int ave_peak_to_peak_time_ms = 1000; // Average time between acceleration peaks, learned during swim 
+static int ave_strokes_per_length = 10; // Avergae number of strokes per length, learned during swim
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
@@ -154,27 +155,41 @@ double square(double num) {
 
 static void increment_lengths(void) {
   
-  if (strokes >= MIN_STROKES_PER_LENGTH) { //If we haven't done MIN_STROKES_PER_LENGTH, we assume length aborted or noisy data 
+  if (strokes >= 3*ave_strokes_per_length/4) { // If we've done more than 75 percent of the average strokes, increment the length
       lengths++;
+      ave_strokes_per_length = ((ave_strokes_per_length * (lengths-1)) + strokes) / lengths; // update avergae strokes per length
       lengths_in_interval++;
       vibes_long_pulse(); // for testing only
       length_elapsed_time = time(NULL) - length_timer_started; // the number of seconds in that last length
       swimming_elapsed_time = swimming_elapsed_time + length_elapsed_time; // number of seconds we have been swimming
       end_of_last_length = time(NULL);
-      #ifdef DEBUG 
-        APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes", lengths, elapsed_time, strokes );
+     #ifdef DEBUG 
+        APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes, %d ave_strokes", lengths, elapsed_time, strokes, ave_strokes_per_length );
       #endif
+      strokes = 0;
+      peaks = 0;
+      up = false;
+      swimming = false;
+      update_main_display();
+      return;
     }
     #ifdef DEBUG
-    else APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes recorded, restarting length");
+  if ((strokes < 3*ave_strokes_per_length/4) && (strokes > ave_strokes_per_length/4)) {//Between 25% and 75% assume a false positive, do nothing
+   APP_LOG(APP_LOG_LEVEL_INFO, "Missing peak mid length, ignored");
+    }
     #endif
+  
     
-    //reset everything for next length:
+  if   (strokes < ave_strokes_per_length/4) { //Less than 25%, restart length
     strokes = 0;
     peaks = 0;
     up = false;
     swimming = false;
     update_main_display();
+    #ifdef DEBUG 
+        APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes, restarting length");
+      #endif
+  }
 }
 
 static void count_strokes(int accel, int timestamp) {
@@ -204,7 +219,7 @@ static void count_strokes(int accel, int timestamp) {
       
       latest_peak_to_peak_time_ms = timestamp - last_peak_time;
       
-      if (strokes > MIN_STROKES_PER_LENGTH) { // this used to be if (peaks > 2)
+      if (peaks > 4) { // this used to be if (peaks > 2)
         
         ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time_ms  )/ peaks; 
         
