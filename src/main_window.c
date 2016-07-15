@@ -9,16 +9,16 @@
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid, current used in a display function only */ 
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
 #define AVE_STROKES_PER_LENGTH_FLOOR 12 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
+#define INITIAL_AVERAGE_PEAK_TO_PEAK_TIME_MS 1000 /* a seed number for the avergae time between peaks, used for length end sensing, adapted during swimming */
 
 // define constants for missing stroke detection
 #define MAX_AVE_PEAK_TO_PEAK_TIME_MS 2500 // the initial, and maximum allowed, average time between peaks
 #define MISSING_PEAK_SENS 9/4 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
 
-static int ave_peak_to_peak_time_ms = 1000; // Average time between acceleration peaks, learned during swim 
+
 static int ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Avergae number of strokes per length, learned during swim
 
-static int strokes = 0;     //counter for strokes recognised in current length
-static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
+
 static int lengths =0;    //counter for lengths (a pause or a glide after several strokes means a length)
 static int intervals = 0; // counter for intervals
 static int lengths_in_interval = 0; // count lengths since last clock trigger
@@ -150,7 +150,7 @@ double square(double num) {
   return approx;
   }
 
-static void increment_lengths(void) {
+static void increment_lengths(int strokes) {
   
   if (strokes >= ave_strokes_per_length/4) { // If we've done more than 25 percent of the average strokes, increment the length
       lengths++;
@@ -170,10 +170,7 @@ static void increment_lengths(void) {
       #endif
   }
     
-    strokes = 0;
-    peaks = 0;
     if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
-    update_main_display();
     
 
 }
@@ -215,21 +212,29 @@ static void count_strokes(int accel, int timestamp) {
   
   
   */
-  
- static int latest_peak_to_peak_time_ms;
+ static int strokes = 0;     //counter for strokes recognised in current length
+ static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke 
+ static int latest_peak_to_peak_time_ms; // The time between the end of detected peaks
+ static int ave_peak_to_peak_time_ms = INITIAL_AVERAGE_PEAK_TO_PEAK_TIME_MS; // Average time between acceleration peaks, learned during swim  
  static int up_time = 0;     // time current peak started, to discount short peaks from measurement
  static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
  static bool up = false;     // have we logged an acceleration peak?
    
   
-  if ((accel > ACC_THRESHOLD) && (up == false)) { //record the start of an acc peak
+  update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time_ms);
+  
+  if (timestamp == 0) return; // allows this function to be called with 0,0 arguments just to pass data to to the display function
+
+  
+  if ((accel > ACC_THRESHOLD) && (up == false)) { //identify the start of an acc peak
       up = true;
       up_time = timestamp;
     }
   
   if ( (accel < ACC_THRESHOLD) && (up == true) )  { //identify the end of an acc peak
     up = false;
-    if (timestamp-up_time > STROKE_MIN_PEAK_TIME_MS) {
+    
+    if (timestamp-up_time > STROKE_MIN_PEAK_TIME_MS) { // was it long enough to count as a peak?
       
       latest_peak_to_peak_time_ms = timestamp - last_peak_time;
       
@@ -254,7 +259,7 @@ static void count_strokes(int accel, int timestamp) {
  
 
    
-update_main_display();
+update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time_ms);
 
   // check for end of length
   
@@ -262,8 +267,11 @@ update_main_display();
     #ifdef DEBUG
      if (peaks > 0 ) APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
     #endif
-    increment_lengths();
+    increment_lengths(strokes);
     up = false;
+    strokes = 0;
+    peaks = 0;
+    
   }
   
   // check for end of interval
@@ -304,30 +312,30 @@ static void update_elapsed_time_display(){
   
 }
 
- void update_main_display(){
+ void update_main_display(int w_lengths, int i_lengths, int strokes, int ap2p) {
   
   static char lengths_text_to_display [8];
   static char strokes_text_to_display [12];
-  int pace = (swimming_elapsed_time/lengths_in_interval)*(100/pool_length[current_pool_length]); // pace of last interval in s/100m, ignoring rest time
+  int pace = (swimming_elapsed_time/i_lengths)*(100/pool_length[current_pool_length]); // pace of last interval in s/100m, ignoring rest time
  
  // define the text to display in the main text layer:  
    if  ( main_display_setting == 0) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", lengths);
+    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", w_lengths);
   }
     if ( main_display_setting == 1) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", lengths*pool_length[current_pool_length]);
+    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", w_lengths*pool_length[current_pool_length]);
   }
    if  ( main_display_setting == 2) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", lengths_in_interval);
+    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", i_lengths);
   }
   if ( main_display_setting == 3) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", lengths_in_interval*pool_length[current_pool_length]);
+    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", i_lengths*pool_length[current_pool_length]);
   } 
 if ( main_display_setting == 4) {
   snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
 }
 if ( main_display_setting == 5) {
-  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", 30000/ave_peak_to_peak_time_ms); 
+  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", 30000/ap2p); 
 }   
  
 // Display that text:  
@@ -337,7 +345,7 @@ text_layer_set_text(lengths_layer,lengths_text_to_display);
 // Display number of stokes - hold at last length until next length underway
   if (strokes > MIN_STROKES_PER_LENGTH) {
    // snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%dst", strokes);
-    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d", ave_peak_to_peak_time_ms); // this for testing...
+    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d", ap2p); // this for testing...
     text_layer_set_text(strokes_layer,strokes_text_to_display);
   }
 
@@ -391,9 +399,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
   }
   else {
     timer_started = 0;
-    strokes = 0;
-    peaks = 0;
-    update_main_display();
+
   }
   
   
@@ -402,12 +408,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle main display
   
-  if (!paused) { // if button pressed while clock running, used to correct length recording errors. ** GET RID OF THIS?
-    lengths--;
-    if (lengths<0) lengths = 0;
-    update_main_display();
-    return;
-  }
+  
   
   main_display_setting++;
   if (main_display_setting > 5) main_display_setting = 0;
@@ -438,26 +439,19 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
       text_layer_set_text(intervals_layer, "l");
       break;
   }
-  update_main_display();
-  update_elapsed_time_display();
- 
+  
+ count_strokes(0,0); // used just as a display updater
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle pool length
   static char pool_text_to_display [5]; 
   
-  if (!paused) { // if button pressed while clock running, used to correct length recording errors. ** Get rid of this?
-    lengths++;
-    update_main_display();
-    return;
-  }
   
   current_pool_length++;
   if (current_pool_length > number_of_pool_lengths-1) current_pool_length = 0;
   
   snprintf(pool_text_to_display,sizeof(pool_text_to_display),"%dm", pool_length[current_pool_length]);
   text_layer_set_text(pool_layer,pool_text_to_display);
-  update_main_display();
 }
 
 static void click_config_provider(void *context) {
