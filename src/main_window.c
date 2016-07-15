@@ -174,7 +174,7 @@ static void increment_lengths(void) {
     strokes = 0;
     peaks = 0;
     swimming = false;
-   if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
+    if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
     update_main_display();
     
 
@@ -183,7 +183,11 @@ static void increment_lengths(void) {
 
 static int get_missing_peak_window(int ap2p, int astrokes, int stroke) {
   
-  // function to return a time window for length end detection. No peak detected in the window = a length turn
+  /* 
+  function to return a time window for length end detection.
+  Window gets smaller as length progresses
+  No peak detected in the window = a length turn
+  */
   
   int base_sense_percent = 200; // this is the minimum ap2p multiplier, should never be less than 200
   int variable_sense_percent = 200; // this is the varialbe element, falls through the legnth
@@ -191,9 +195,10 @@ static int get_missing_peak_window(int ap2p, int astrokes, int stroke) {
   
   int percent_of_length_left = 0;
   
-  if (stroke < astrokes) percent_of_length_left = (astrokes - stroke) / astrokes * 100;
   
-  missing_peak_window = (base_sense_percent + variable_sense_percent*percent_of_length_left) * ap2p / 100;
+  if (stroke < astrokes) percent_of_length_left = 100*(astrokes - stroke)/astrokes;
+  
+  missing_peak_window =  ap2p * (base_sense_percent + (variable_sense_percent*percent_of_length_left/100)) / 100;
   
   return missing_peak_window;
   
@@ -208,7 +213,7 @@ static void count_strokes(int accel, int timestamp) {
   A stroke has two acceleration peaks in quick succession (up and down or out and back) (strokes = peaks /2)
   We count a peak if accel stays above ACC_THRESHOLD for longer than MIN_PEAK_TIME
   For each length, we track the average time between peaks.
-  If we don't see another peak for missing_peak_sense * that average we call the increment lengths function
+  If we don't see another peak within missing_peak_window we call the increment lengths function
   
   
   */
@@ -230,7 +235,7 @@ static void count_strokes(int accel, int timestamp) {
       
       latest_peak_to_peak_time_ms = timestamp - last_peak_time;
       
-      if (peaks > 4) { // this used to be if (peaks > 2)
+      if (strokes >= ave_strokes_per_length/4) { // this used to be if (peaks > 4) - so that movement between lengths doesnt affect ap2p
         
         ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time_ms  )/ peaks; 
         
@@ -239,22 +244,23 @@ static void count_strokes(int accel, int timestamp) {
       
       last_peak_time = timestamp;
       peaks++; //if the peak was long enough, log it
+      strokes = peaks / 2;
       if (peaks == 1) length_timer_started=time(NULL);
       #ifdef DEBUG
-        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms", peaks, timestamp-up_time, elapsed_time, strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms);
+        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms, window %dms", peaks, 
+                timestamp-up_time, elapsed_time, strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms, 
+                get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes));
       #endif
     }
   }    
  
-strokes = peaks / 2;
-  
 
    
 update_main_display();
 
   // check for end of length
   
-  if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) ) {
+  if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 0) ) {
     #ifdef DEBUG
      if (peaks > 0 ) APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
     #endif
