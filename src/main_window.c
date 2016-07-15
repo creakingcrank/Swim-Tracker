@@ -19,10 +19,9 @@ static int ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Avergae num
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
-static int lengths =0;    //counter for lengths (a pause pr a glide after several strokes means a length)
+static int lengths =0;    //counter for lengths (a pause or a glide after several strokes means a length)
 static int intervals = 0; // counter for intervals
 static int lengths_in_interval = 0; // count lengths since last clock trigger
-static bool swimming = false; // toggle to stop fiddling with things until a stroke is counted
 static bool paused = true;  // toggled by set button
 
 
@@ -173,7 +172,6 @@ static void increment_lengths(void) {
     
     strokes = 0;
     peaks = 0;
-    swimming = false;
     if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
     update_main_display();
     
@@ -262,7 +260,7 @@ update_main_display();
   
   if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 0) ) {
     #ifdef DEBUG
-     if (peaks > 0 ) APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
+     if (peaks > 0 ) APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
     #endif
     increment_lengths();
     up = false;
