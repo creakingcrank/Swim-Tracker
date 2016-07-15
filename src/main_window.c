@@ -8,23 +8,20 @@
 #define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid, current used in a display function only */ 
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
-#define INITIAL_AVE_STROKES_PER_LENGTH 5 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
+#define AVE_STROKES_PER_LENGTH_FLOOR 12 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
 
 // define constants for missing stroke detection
 #define MAX_AVE_PEAK_TO_PEAK_TIME_MS 2500 // the initial, and maximum allowed, average time between peaks
 #define MISSING_PEAK_SENS 9/4 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
 
 static int ave_peak_to_peak_time_ms = 1000; // Average time between acceleration peaks, learned during swim 
-static int ave_strokes_per_length = INITIAL_AVE_STROKES_PER_LENGTH; // Avergae number of strokes per length, learned during swim
+static int ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Avergae number of strokes per length, learned during swim
 
 static int strokes = 0;     //counter for strokes recognised in current length
 static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke
 static int lengths =0;    //counter for lengths (a pause pr a glide after several strokes means a length)
 static int intervals = 0; // counter for intervals
 static int lengths_in_interval = 0; // count lengths since last clock trigger
-static int up_time = 0;     // time current peak started, to discount short peaks from measurement
-static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
-static bool up = false;     // have we logged an acceleration peak?
 static bool swimming = false; // toggle to stop fiddling with things until a stroke is counted
 static bool paused = true;  // toggled by set button
 
@@ -176,8 +173,8 @@ static void increment_lengths(void) {
     
     strokes = 0;
     peaks = 0;
-    up = false;
     swimming = false;
+   if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
     update_main_display();
     
 
@@ -217,6 +214,9 @@ static void count_strokes(int accel, int timestamp) {
   */
   
  static int latest_peak_to_peak_time_ms;
+ static int up_time = 0;     // time current peak started, to discount short peaks from measurement
+ static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
+ static bool up = false;     // have we logged an acceleration peak?
    
   
   if ((accel > ACC_THRESHOLD) && (up == false)) { //record the start of an acc peak
@@ -243,21 +243,23 @@ static void count_strokes(int accel, int timestamp) {
       #ifdef DEBUG
         APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms", peaks, timestamp-up_time, elapsed_time, strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms);
       #endif
-      update_main_display(); // this basically for debug so we can see peak tracking on screen
     }
   }    
  
 strokes = peaks / 2;
+  
+
    
 update_main_display();
 
   // check for end of length
   
-  if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 1)) {
+  if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) ) {
     #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
+     if (peaks > 0 ) APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
     #endif
     increment_lengths();
+    up = false;
   }
   
   // check for end of interval
@@ -266,7 +268,6 @@ update_main_display();
     intervals++;
     swimming_elapsed_time = 0;
     lengths_in_interval = 0; 
-    ave_strokes_per_length = INITIAL_AVE_STROKES_PER_LENGTH; // reset avergae strokes per length to account for stroke change - don't like this, since not good for medley swimmers...
     vibes_short_pulse(); // for testing only
      #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Interval triggered at %ds", elapsed_time);
