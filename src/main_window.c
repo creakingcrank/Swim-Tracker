@@ -156,10 +156,10 @@ double square(double num) {
 
 static void increment_lengths(void) {
   
-  if (strokes >= 3*ave_strokes_per_length/4) { // If we've done more than 75 percent of the average strokes, increment the length
+  if (strokes >= ave_strokes_per_length/4) { // If we've done more than 25 percent of the average strokes, increment the length
       lengths++;
-      ave_strokes_per_length = ((ave_strokes_per_length * (lengths-1)) + strokes) / lengths; // update avergae strokes per length
       lengths_in_interval++;
+      ave_strokes_per_length = ((ave_strokes_per_length * (lengths_in_interval-1)) + strokes) / lengths_in_interval; // update average strokes per length
       vibes_long_pulse(); // for testing only
       length_elapsed_time = time(NULL) - length_timer_started; // the number of seconds in that last length
       swimming_elapsed_time = swimming_elapsed_time + length_elapsed_time; // number of seconds we have been swimming
@@ -167,30 +167,39 @@ static void increment_lengths(void) {
      #ifdef DEBUG 
         APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes, %d ave_strokes", lengths, elapsed_time, strokes, ave_strokes_per_length );
       #endif
-      strokes = 0;
-      peaks = 0;
-      up = false;
-      swimming = false;
-      update_main_display();
-      return;
-    }
-    #ifdef DEBUG
-  if ((strokes < 3*ave_strokes_per_length/4) && (strokes > ave_strokes_per_length/4)) {//Between 25% and 75% assume a false positive, do nothing
-   APP_LOG(APP_LOG_LEVEL_INFO, "Missing peak mid length, ignored");
-    }
-    #endif
-  
+  }
+  else { // else assume false alarm and reset the length
+    #ifdef DEBUG 
+        APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes, restarting length");
+      #endif
+  }
     
-  if   (strokes < ave_strokes_per_length/4) { //Less than 25%, restart length
     strokes = 0;
     peaks = 0;
     up = false;
     swimming = false;
     update_main_display();
-    #ifdef DEBUG 
-        APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes, restarting length");
-      #endif
-  }
+    
+
+}
+
+
+static int get_missing_peak_window(int ap2p, int astrokes, int stroke) {
+  
+  // function to return a time window for length end detection. No peak detected in the window = a length turn
+  
+  int base_sense_percent = 200; // this is the minimum ap2p multiplier, should never be less than 200
+  int variable_sense_percent = 200; // this is the varialbe element, falls through the legnth
+  int missing_peak_window;
+  
+  int percent_of_length_left = 0;
+  
+  if (stroke < astrokes) percent_of_length_left = (astrokes - stroke) / astrokes * 100;
+  
+  missing_peak_window = (base_sense_percent + variable_sense_percent*percent_of_length_left) * ap2p / 100;
+  
+  return missing_peak_window;
+  
 }
 
 static void count_strokes(int accel, int timestamp) {
@@ -208,6 +217,7 @@ static void count_strokes(int accel, int timestamp) {
   */
   
  static int latest_peak_to_peak_time_ms;
+   
   
   if ((accel > ACC_THRESHOLD) && (up == false)) { //record the start of an acc peak
       up = true;
@@ -243,7 +253,7 @@ update_main_display();
 
   // check for end of length
   
-  if ( ((timestamp - last_peak_time) > (ave_peak_to_peak_time_ms * MISSING_PEAK_SENS)) && (peaks > 1)) {
+  if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 1)) {
     #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Stroke missed, triggering length check at %ds", elapsed_time);
     #endif
