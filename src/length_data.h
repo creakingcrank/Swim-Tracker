@@ -6,3 +6,5 @@ time_t get_length_end_time(int index);
 int get_length_strokes(int index);
 int get_length_duration(int index);
 int get_length_stroke_rate(int index);
+int get_workout_duration(void);
+int get_workout_pace(void);

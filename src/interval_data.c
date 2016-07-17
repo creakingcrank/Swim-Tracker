@@ -24,7 +24,7 @@ int new_interval(void) {
   if (current_interval > MAX_NUMBER_OF_INTERVALS) {
     current_interval = 1; // if we have reached the end of storage, roll around
     #ifdef DEBUG 
-      APP_LOG(APP_LOG_LEVEL_INFO, "Max intervals Exceed, restarting counter");
+      APP_LOG(APP_LOG_LEVEL_INFO, "Max intervals exceeded, restarting counter");
     #endif 
   }
   #ifdef DEBUG 
@@ -106,3 +106,15 @@ int get_interval_stroke_rate(int index) {
       
   return 60 * strokes /duration;    
 }     
+
+int get_interval_pace(int index) {
+  
+  int pace;
+  
+  if (!is_valid_interval(index)) return -1;
+  
+  pace = get_interval_duration(index)/get_interval_lengths(index);
+  
+  return pace;
+  
+}

@@ -101,3 +101,16 @@ int get_length_stroke_rate(int index) {
   return 60*length[index].strokes/duration;
   
 }
+
+int get_workout_duration(void) {
+  return get_length_end_time(current_length)-get_length_start_time(1);
+}
+
+int get_workout_pace(void) {
+  
+  int pace;
+  
+  pace = get_workout_duration()/get_total_number_of_lengths();
+    
+  return pace;
+}

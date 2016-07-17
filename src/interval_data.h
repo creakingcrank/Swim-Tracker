@@ -9,3 +9,4 @@ int get_interval_lengths(int index);
 int get_interval_duration(int index);
 int get_interval_strokes(int index);
 int get_interval_stroke_rate(int index);
+int get_interval_pace(int index);

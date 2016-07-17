@@ -1,6 +1,7 @@
 #include <pebble.h>
 #include "main_window.h"
 #include "length_data.h"
+#include "interval_data.h"
 
  #define DEBUG  /* debugging code */
 
@@ -219,11 +220,9 @@ static void count_strokes(int accel, int timestamp) {
  static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
  static bool up = false;     // have we logged an acceleration peak?
  static time_t start_of_length_time; // The time the first acceleration peak in a length is recorded 
+  
+ static char strokes_text_to_display [12]; 
    
-  
-  update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time_ms);
-  
-  if (timestamp == 0) return; // allows this function to be called with 0,0 arguments just to pass data to to the display function
 
   
   if ((accel > ACC_THRESHOLD) && (up == false)) { //identify the start of an acc peak
@@ -243,6 +242,9 @@ static void count_strokes(int accel, int timestamp) {
         ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time_ms  )/ peaks; 
         
         if (ave_peak_to_peak_time_ms > MAX_AVE_PEAK_TO_PEAK_TIME_MS) ave_peak_to_peak_time_ms = MAX_AVE_PEAK_TO_PEAK_TIME_MS; // if avep2p gets too big, cap it.
+        
+        snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d", ave_peak_to_peak_time_ms); // this for testing...
+        text_layer_set_text(strokes_layer,strokes_text_to_display);
       }
       
       last_peak_time = timestamp;
@@ -259,8 +261,6 @@ static void count_strokes(int accel, int timestamp) {
  
 
    
-update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time_ms);
-
   // check for end of length
   
   if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 0) ) {
@@ -275,7 +275,10 @@ update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time
     peaks = 0;
     
   }
-  
+
+  update_main_display();
+
+
 
 }
 
@@ -303,42 +306,43 @@ static void update_elapsed_time_display(){
   
 }
 
- void update_main_display(int w_lengths, int i_lengths, int strokes, int ap2p) {
+ void update_main_display(void) {
   
   static char lengths_text_to_display [8];
-  static char strokes_text_to_display [12];
-  int pace = (swimming_elapsed_time/i_lengths)*(100/pool_length[current_pool_length]); // pace of last interval in s/100m, ignoring rest time
+  
+  int pace;
  
- // define the text to display in the main text layer:  
-   if  ( main_display_setting == 0) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", w_lengths);
-  }
-    if ( main_display_setting == 1) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", w_lengths*pool_length[current_pool_length]);
-  }
-   if  ( main_display_setting == 2) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", i_lengths);
-  }
-  if ( main_display_setting == 3) {
-    snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", i_lengths*pool_length[current_pool_length]);
-  } 
-if ( main_display_setting == 4) {
-  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
-}
-if ( main_display_setting == 5) {
-  snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", 30000/ap2p); 
-}   
+    switch (main_display_setting) {
+    case 0 :
+      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", get_total_number_of_lengths());
+      break;
+    case 1 :
+      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", get_total_number_of_lengths()*pool_length[current_pool_length]);
+      break;
+    case 2 :
+      pace = get_workout_pace() * 100 / pool_length[current_pool_length];
+      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
+      break;
+    case 3 :
+      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", get_interval_lengths(get_current_interval()));
+      break;
+    case 4 :
+       snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", get_interval_lengths(get_current_interval())*pool_length[current_pool_length]);
+      break;
+    case 5 :
+      pace = get_interval_pace(get_current_interval()) * 100 / pool_length[current_pool_length];
+      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
+      break;
+    case 6 :
+      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", get_interval_stroke_rate(get_current_interval()));
+      break;
+ 
+  }   
  
 // Display that text:  
    
 text_layer_set_text(lengths_layer,lengths_text_to_display);
 
-// Display number of stokes - hold at last length until next length underway
-  if (strokes > MIN_STROKES_PER_LENGTH) {
-   // snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%dst", strokes);
-    snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d", ap2p); // this for testing...
-    text_layer_set_text(strokes_layer,strokes_text_to_display);
-  }
 
 }
 
@@ -402,7 +406,7 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
   
   
   main_display_setting++;
-  if (main_display_setting > 5) main_display_setting = 0;
+  if (main_display_setting > 6) main_display_setting = 0;
   
   switch (main_display_setting) {
     case 0 :
@@ -414,24 +418,28 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
       text_layer_set_text(intervals_layer, "w");
       break;
     case 2 :
+      text_layer_set_text(l_text, "Pace");
+      text_layer_set_text(intervals_layer, "w");
+      break;
+    case 3 :
       text_layer_set_text(l_text, "Lengths");
       text_layer_set_text(intervals_layer, "i");
       break;
-     case 3 :
+    case 4 :
       text_layer_set_text(l_text, "Distance");
       text_layer_set_text(intervals_layer, "i");
       break;
-    case 4 :
+    case 5 :
       text_layer_set_text(l_text, "Pace");
       text_layer_set_text(intervals_layer, "i");
       break;
-    case 5 :
+    case 6 :
       text_layer_set_text(l_text, "str/min");
-      text_layer_set_text(intervals_layer, "l");
+      text_layer_set_text(intervals_layer, "i");
       break;
   }
   
- count_strokes(0,0); // used just as a display updater
+ update_main_display();
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle pool length
