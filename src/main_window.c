@@ -1,5 +1,6 @@
 #include <pebble.h>
 #include "main_window.h"
+#include "length_data.h"
 
  #define DEBUG  /* debugging code */
 
@@ -28,8 +29,7 @@ static bool paused = true;  // toggled by set button
 time_t timer_started = 0; // if the clock is running, this holds the the time it was started -
 int elapsed_time = 0; //the number of seconds the clock has been running
 
-time_t length_timer_started = 0; // the time we start registering swimming in a length, for stroke rate etc.
-time_t end_of_last_length = 0; // time last length ended for auto intervel detection
+
 int length_elapsed_time = 0; // the elapsed length time;
 int swimming_elapsed_time = 0; // cumulative length time for interval - reset when timer reset, used for pace calculation
 
@@ -150,21 +150,20 @@ double square(double num) {
   return approx;
   }
 
-static void increment_lengths(int strokes) {
+static bool length_end_check(int strokes) {
+  
+  bool return_value;
   
   if (strokes >= ave_strokes_per_length/4) { // If we've done more than 25 percent of the average strokes, increment the length
       lengths++;
       lengths_in_interval++;
       ave_strokes_per_length = ((ave_strokes_per_length * (lengths_in_interval-1)) + strokes) / lengths_in_interval; // update average strokes per length
       vibes_long_pulse(); // for testing only
-      length_elapsed_time = time(NULL) - length_timer_started; // the number of seconds in that last length
-      swimming_elapsed_time = swimming_elapsed_time + length_elapsed_time; // number of seconds we have been swimming
-      end_of_last_length = time(NULL);
-     #ifdef DEBUG 
-        APP_LOG(APP_LOG_LEVEL_INFO, "Length %d recorded at %ds, %d strokes, %d ave_strokes", lengths, elapsed_time, strokes, ave_strokes_per_length );
-      #endif
+      return_value = true;
+     
   }
   else { // else assume false alarm and reset the length
+    return_value = false;
     #ifdef DEBUG 
         APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes, restarting length");
       #endif
@@ -172,7 +171,7 @@ static void increment_lengths(int strokes) {
     
     if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
     
-
+return return_value;
 }
 
 
@@ -219,6 +218,7 @@ static void count_strokes(int accel, int timestamp) {
  static int up_time = 0;     // time current peak started, to discount short peaks from measurement
  static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
  static bool up = false;     // have we logged an acceleration peak?
+ static time_t start_of_length_time; // The time the first acceleration peak in a length is recorded 
    
   
   update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time_ms);
@@ -248,7 +248,7 @@ static void count_strokes(int accel, int timestamp) {
       last_peak_time = timestamp;
       peaks++; //if the peak was long enough, log it
       strokes = peaks / 2;
-      if (peaks == 1) length_timer_started=time(NULL);
+      if (peaks == 1) start_of_length_time=time(NULL);
       #ifdef DEBUG
         APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms, window %dms", peaks, 
                 timestamp-up_time, elapsed_time, strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms, 
@@ -265,9 +265,11 @@ update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time
   
   if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 0) ) {
     #ifdef DEBUG
-     if (peaks > 0 ) APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
+      APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
     #endif
-    increment_lengths(strokes);
+    if (length_end_check(strokes)) {
+      set_length( 0, start_of_length_time, time(NULL), strokes);
+    }
     up = false;
     strokes = 0;
     peaks = 0;
@@ -276,10 +278,7 @@ update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time
   
   // check for end of interval
   
-  if (((time(NULL) -  end_of_last_length) > TRIGGER_AUTO_INTERVAL_AFTER_S) && (lengths_in_interval>0) && (peaks==0)) {
-    intervals++;
-    swimming_elapsed_time = 0;
-    lengths_in_interval = 0; 
+  if (((time(NULL) -  get_length_end_time(get_total_number_of_lengths())) > TRIGGER_AUTO_INTERVAL_AFTER_S) && (lengths_in_interval>0) && (peaks==0)) {
     vibes_short_pulse(); // for testing only
      #ifdef DEBUG
       APP_LOG(APP_LOG_LEVEL_INFO, "Interval triggered at %ds", elapsed_time);
