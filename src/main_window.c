@@ -2,6 +2,7 @@
 #include "main_window.h"
 #include "length_data.h"
 #include "interval_data.h"
+#include "comms.h"
 
  #define DEBUG  /* debugging code */
 
@@ -477,7 +478,7 @@ static void init() {
 
 static void deinit() {
   
-//Window destroyed automatically so no action here at the moment, exists to destroy data in future
+  dump_data_to_app_log();
 
 }
 
