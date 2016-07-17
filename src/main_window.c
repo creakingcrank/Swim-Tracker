@@ -276,14 +276,6 @@ update_main_display(lengths, lengths_in_interval, strokes, ave_peak_to_peak_time
     
   }
   
-  // check for end of interval
-  
-  if (((time(NULL) -  get_length_end_time(get_total_number_of_lengths())) > TRIGGER_AUTO_INTERVAL_AFTER_S) && (lengths_in_interval>0) && (peaks==0)) {
-    vibes_short_pulse(); // for testing only
-     #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Interval triggered at %ds", elapsed_time);
-    #endif
-  }
 
 }
 
