@@ -264,6 +264,7 @@ static void count_strokes(int accel, int timestamp) {
   }
 
   update_main_display();
+  update_status_display();
 
 
 
@@ -331,65 +332,11 @@ static void update_elapsed_time_display(){
 // Display that text:  
    
 text_layer_set_text(lengths_layer,lengths_text_to_display);
-
-
 }
 
-static void timer_callback(void *data) { // main loop to collect acceleration data
- 
-
-static int total_acc;
-static time_t t_s;
-static uint16_t t_ms;
-static int current_time;  
-AccelData accel = (AccelData) { .x = 0, .y = 0, .z = 0, .did_vibrate = false, .timestamp = 0 };
-  
-  if (paused) return; // end here if not swimming 
-
-accel_service_peek(&accel); //get accelerometer data
-
-time_ms(&t_s, &t_ms); 
-current_time = t_s*1000 + t_ms; //get current time in ms
-  
-if (!accel.did_vibrate) { //ignore readings polluted by vibes (1st few always are as start sets off vibration)
-  
-  total_acc = get_sqrt(square(accel.x)+square(accel.y)+square(accel.z)); //calculate overall acc using pythagoras
-  count_strokes(total_acc, current_time);  // call the stroke count function
- // detect_glide(accel.x,current_time); // call the glide detection function
-
-}
-
-app_timer_register(ACCEL_STEP_MS, timer_callback, NULL); 
-}
-
-void hide_main_window(void) {
-  window_stack_remove(s_window, true);
-}
-
-static void select_click_handler(ClickRecognizerRef recognizer, void *context) { //timer on/off
-  
-  time_t current_time = time(NULL);
-  
-  paused = !paused;
-  vibes_double_pulse();
-  #ifdef DEBUG
-    APP_LOG(APP_LOG_LEVEL_INFO,"Timer triggered at %ds",get_workout_duration());
-  #endif
-  if (!paused) { 
-    if (get_total_number_of_lengths() <1 ) {
-      set_length( 1, current_time, current_time, 0); // put a valid initial time in so the clock makes sense until 1st length recorded.
-    }
-    update_elapsed_time_display(NULL);
-    timer_callback(0);
-  }
-}
-
-static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle main display
+void update_status_display(void) {
   
   static char intervals_text[9];
-  
-  main_display_setting++;
-  if (main_display_setting > 6) main_display_setting = 0;
   
   switch (main_display_setting) {
     case 0 :
@@ -429,7 +376,66 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
     break; 
   }
   text_layer_set_text(intervals_layer,intervals_text);
+}  
+
+static void timer_callback(void *data) { // main loop to collect acceleration data
+ 
+
+static int total_acc;
+static time_t t_s;
+static uint16_t t_ms;
+static int current_time;  
+AccelData accel = (AccelData) { .x = 0, .y = 0, .z = 0, .did_vibrate = false, .timestamp = 0 };
   
+  if (paused) return; // end here if not swimming 
+
+accel_service_peek(&accel); //get accelerometer data
+
+time_ms(&t_s, &t_ms); 
+current_time = t_s*1000 + t_ms; //get current time in ms
+  
+if (!accel.did_vibrate) { //ignore readings polluted by vibes (1st few always are as start sets off vibration)
+  
+  total_acc = get_sqrt(square(accel.x)+square(accel.y)+square(accel.z)); //calculate overall acc using pythagoras
+  count_strokes(total_acc, current_time);  // call the stroke count function
+ // detect_glide(accel.x,current_time); // call the glide detection function
+
+}
+  
+app_timer_register(ACCEL_STEP_MS, timer_callback, NULL); 
+}
+
+void hide_main_window(void) {
+  window_stack_remove(s_window, true);
+}
+
+static void select_click_handler(ClickRecognizerRef recognizer, void *context) { //timer on/off
+  
+  time_t current_time = time(NULL);
+  
+  paused = !paused;
+  vibes_double_pulse();
+  #ifdef DEBUG
+    APP_LOG(APP_LOG_LEVEL_INFO,"Timer triggered at %ds",get_workout_duration());
+  #endif
+  if (!paused) { 
+    if (get_total_number_of_lengths() <1 ) {
+      set_length( 1, current_time, current_time, 0); // put a valid initial time in so the clock makes sense until 1st length recorded.
+    }
+    update_elapsed_time_display(NULL);
+    timer_callback(0);
+  }
+}
+
+static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle main display
+  
+  
+  
+  main_display_setting++;
+  if (main_display_setting > 6) main_display_setting = 0;
+  
+  
+ update_status_display(); 
  update_main_display();
 }
 
