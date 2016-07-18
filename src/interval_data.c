@@ -74,6 +74,13 @@ int get_interval_lengths(int index) {
       
 }
 
+int get_interval_start_time(int index) {
+   if (!is_valid_interval(index)) return -1;
+  
+  return get_length_start_time(get_interval_first_length(index));
+}
+
+
 int get_interval_duration(int index) {
    if (!is_valid_interval(index)) return -1;
   return get_length_end_time(get_interval_last_length(index)) - get_length_start_time(get_interval_first_length(index));    

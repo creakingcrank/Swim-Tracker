@@ -8,7 +8,7 @@
 
 #define ACCEL_STEP_MS 20         /* frequency of accelerometer checks */
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
-#define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
+#define STROKE_MIN_PEAK_TIME_MS 150     /* minimim durationof peak to count it */
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid, current used in a display function only */ 
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
 #define AVE_STROKES_PER_LENGTH_FLOOR 12 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
@@ -21,19 +21,7 @@
 
 static int ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Avergae number of strokes per length, learned during swim
 
-
-static int lengths =0;    //counter for lengths (a pause or a glide after several strokes means a length)
-static int intervals = 0; // counter for intervals
-static int lengths_in_interval = 0; // count lengths since last clock trigger
 static bool paused = true;  // toggled by set button
-
-
-time_t timer_started = 0; // if the clock is running, this holds the the time it was started -
-int elapsed_time = 0; //the number of seconds the clock has been running
-
-
-int length_elapsed_time = 0; // the elapsed length time;
-int swimming_elapsed_time = 0; // cumulative length time for interval - reset when timer reset, used for pace calculation
 
 static int pool_length[] = {25, 33, 50};
 static int number_of_pool_lengths = sizeof(pool_length)/sizeof(pool_length[0]);
@@ -157,9 +145,7 @@ static bool length_end_check(int strokes) {
   bool return_value;
   
   if (strokes >= ave_strokes_per_length/4) { // If we've done more than 25 percent of the average strokes, increment the length
-      lengths++;
-      lengths_in_interval++;
-      ave_strokes_per_length = ((ave_strokes_per_length * (lengths_in_interval-1)) + strokes) / lengths_in_interval; // update average strokes per length
+      ave_strokes_per_length = ((ave_strokes_per_length * (get_interval_lengths(get_current_interval())-1)) + strokes) / get_interval_lengths(get_current_interval()); // update average strokes per length
       vibes_long_pulse(); // for testing only
       return_value = true;
      
@@ -254,7 +240,7 @@ static void count_strokes(int accel, int timestamp) {
       if (peaks == 1) start_of_length_time=time(NULL);
       #ifdef DEBUG
         APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms, window %dms", peaks, 
-                timestamp-up_time, elapsed_time, strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms, 
+                timestamp-up_time, elapsed_time_in_workout(), strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms, 
                 get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes));
       #endif
     }
@@ -266,7 +252,7 @@ static void count_strokes(int accel, int timestamp) {
   
   if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 0) ) {
     #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time);
+      APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time_in_workout());
     #endif
     if (length_end_check(strokes)) {
       set_length( 0, start_of_length_time, time(NULL), strokes);
@@ -286,11 +272,13 @@ static void count_strokes(int accel, int timestamp) {
 static void update_elapsed_time_display(){
   
   static char time_to_display[9];
-  time_t current_time;
-  if (timer_started > 0){
-    current_time = time(NULL);
-    elapsed_time = elapsed_time + current_time - timer_started;
-    timer_started = current_time;
+  
+  time_t current_time = time(NULL);
+  int workout_elapsed_time = elapsed_time_in_workout();
+  int interval_elapsed_time = get_interval_duration(get_current_interval());
+  
+  
+  if (!paused){
     text_layer_set_background_color(stopwatch_layer, GColorWhite);
     text_layer_set_text_color(stopwatch_layer, GColorBlack);
     app_timer_register(1000, update_elapsed_time_display, NULL );
@@ -301,8 +289,8 @@ static void update_elapsed_time_display(){
   }
   
   // if you are watching overall data, show workout time, else show interval time
-  if (main_display_setting < 2) snprintf(time_to_display,sizeof(time_to_display),"%01d:%02d:%02d",elapsed_time / 3600, (elapsed_time / 60) % 60, elapsed_time  % 60 );
-  else snprintf(time_to_display,sizeof(time_to_display),"%01d:%02d:%02d",swimming_elapsed_time / 3600, (swimming_elapsed_time / 60) % 60, swimming_elapsed_time  % 60 );
+  if (main_display_setting < 3) snprintf(time_to_display,sizeof(time_to_display),"%01d:%02d:%02d",workout_elapsed_time / 3600, (workout_elapsed_time / 60) % 60, workout_elapsed_time  % 60 );
+  else snprintf(time_to_display,sizeof(time_to_display),"%01d:%02d:%02d",interval_elapsed_time / 3600, (interval_elapsed_time / 60) % 60, interval_elapsed_time  % 60 );
   text_layer_set_text(stopwatch_layer, time_to_display);
   
 }
@@ -380,31 +368,25 @@ void hide_main_window(void) {
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) { //timer on/off
   
+  time_t current_time = time(NULL);
+  
   paused = !paused;
   vibes_double_pulse();
   #ifdef DEBUG
-    APP_LOG(APP_LOG_LEVEL_INFO,"Timer triggered at %ds",elapsed_time);
+    APP_LOG(APP_LOG_LEVEL_INFO,"Timer triggered at %ds",get_workout_duration());
   #endif
-  
-  if (!paused){
-    timer_started = time(NULL);
-    intervals++;
-    swimming_elapsed_time = 0; // reset swimming elapsed time so pace shows pace of last interval, more useful?
-    lengths_in_interval = 0;
-    update_elapsed_time_display();
+  if (!paused) { 
+    if (get_total_number_of_lengths() <1 ) {
+      set_length( 1, current_time, current_time, 0); // put a valid initial time in so the clock makes sense until 1st length recorded.
+    }
+    update_elapsed_time_display(NULL);
+    timer_callback(0);
   }
-  else {
-    timer_started = 0;
-
-  }
-  
-  
-  timer_callback(0);
 }
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle main display
   
-  
+  static char intervals_text[9];
   
   main_display_setting++;
   if (main_display_setting > 6) main_display_setting = 0;
@@ -412,33 +394,41 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
   switch (main_display_setting) {
     case 0 :
       text_layer_set_text(l_text, "Lengths");
-      text_layer_set_text(intervals_layer, "w");
       break;
     case 1 :
       text_layer_set_text(l_text, "Distance");
-      text_layer_set_text(intervals_layer, "w");
       break;
     case 2 :
       text_layer_set_text(l_text, "Pace");
-      text_layer_set_text(intervals_layer, "w");
       break;
     case 3 :
       text_layer_set_text(l_text, "Lengths");
-      text_layer_set_text(intervals_layer, "i");
       break;
     case 4 :
       text_layer_set_text(l_text, "Distance");
-      text_layer_set_text(intervals_layer, "i");
       break;
     case 5 :
       text_layer_set_text(l_text, "Pace");
-      text_layer_set_text(intervals_layer, "i");
       break;
     case 6 :
       text_layer_set_text(l_text, "str/min");
-      text_layer_set_text(intervals_layer, "i");
       break;
   }
+  
+  switch (main_display_setting) {
+    case 0 :
+    case 1 :
+    case 2 :
+      snprintf(intervals_text,sizeof(intervals_text),"w");
+      break;
+    case 3 :
+    case 4 : 
+    case 5 :
+    case 6 :
+     snprintf(intervals_text,sizeof(intervals_text),"i%d",get_current_interval());
+    break; 
+  }
+  text_layer_set_text(intervals_layer,intervals_text);
   
  update_main_display();
 }
