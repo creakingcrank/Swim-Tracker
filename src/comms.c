@@ -3,6 +3,14 @@
 #include "length_data.h"
 #include "interval_data.h"
 
+const uint32_t storage_version_key = 1;
+  const int current_storage_version = 1;
+  const int current_length_storage_key = 2;
+  const int current_interval_storage_key = 3;
+  const int length_storage_key_start = 100;
+  const int interval_storage_key_start = 1000;
+
+
 void dump_data_to_app_log(void) {
  
   int i;
@@ -16,5 +24,30 @@ void dump_data_to_app_log(void) {
     }
   }
   
+  
+}
+
+void dump_data_to_persist(void) {
+
+  
+
+  persist_write_int(storage_version_key,current_storage_version);
+  persist_write_int(current_length_storage_key,get_current_length());
+  persist_write_int(current_interval_storage_key,get_current_interval());
+
+  dump_lengths_to_persist(length_storage_key_start);
+  dump_intervals_to_persist(interval_storage_key_start);
+
+}
+
+void read_data_from_persist(void) {
+
+  if (persist_read_int(storage_version_key)==current_storage_version) {
+    set_current_length(persist_read_int(current_length_storage_key));
+    set_current_interval(persist_read_int(current_interval_storage_key));
+  
+    read_lengths_from_persist(length_storage_key_start);
+    read_intervals_from_persist(interval_storage_key_start);
+  }
   
 }

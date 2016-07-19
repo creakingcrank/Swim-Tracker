@@ -52,7 +52,7 @@ int set_length( int length_number, time_t start, time_t end, int stroke)  {
 
   /* now check for a new interval */
   
-  if (current_length <= 2) { //if that was the first length, log the beginning of the first interval
+  if (index == 1) { //if that was the first length, log the beginning of the first interval
     set_interval(1, 1, 1);
   }
   else if ( (length[index].start_time-length[index-1].end_time) > INTERVAL_TRIGGER_TIME_S ) {
@@ -65,6 +65,16 @@ return current_length-1; // return the total number of lengths recorded so far
 
 int get_total_number_of_lengths(void) {
   return current_length - 1;
+}
+
+int get_current_length(void) {
+  return current_length;
+}
+
+int set_current_length(int length) {
+  if ((length<1)||(length>MAX_NUMBER_OF_LENGTHS)) return -1;
+  else current_length = length;
+  return 0;
 }
 
 time_t get_length_start_time(int index) {
@@ -132,4 +142,19 @@ int  elapsed_time_in_workout(void) {
   return elapsed;
 }
   
+void dump_lengths_to_persist(int length_storage_key_start) {
   
+  int number_of_lengths = get_total_number_of_lengths();
+  int i;
+  
+  for (i = 1; i<=number_of_lengths; i++) persist_write_data(length_storage_key_start+i, &length[i], sizeof(length[i]));
+  
+}
+
+void read_lengths_from_persist(int length_storage_key_start) {
+  int number_of_lengths = get_total_number_of_lengths();
+  int i;
+  
+  for (i = 1; i<=number_of_lengths; i++) persist_read_data(length_storage_key_start+i, &length[i], sizeof(length[i]));
+  
+}

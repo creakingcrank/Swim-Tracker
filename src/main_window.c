@@ -451,6 +451,19 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) { /
 }
 
 static void long_select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  
+  // RESET!!!!! 
+  if (paused) {
+    set_current_length(1);
+    set_length(1,time(NULL),0,0); // clear data in current lenght - leave program to ovewrite other data
+    set_current_interval(1);
+    vibes_long_pulse();
+    update_main_display();
+    update_elapsed_time_display();
+  }
+}
+
+static void long_down_click_handler(ClickRecognizerRef recognizer, void *context) {
   dump_data_to_app_log();
 }
 
@@ -458,7 +471,8 @@ static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
   window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
   window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
-  window_long_click_subscribe(BUTTON_ID_SELECT, 3000, NULL, long_select_click_handler);
+  window_long_click_subscribe(BUTTON_ID_SELECT, 3000, long_select_click_handler ,NULL );
+   window_long_click_subscribe(BUTTON_ID_DOWN, 3000,long_down_click_handler, NULL );
 }
 static void handle_window_unload(Window* window) {
   destroy_ui();
@@ -474,11 +488,16 @@ window_stack_push(s_window, true);
 }
 
 static void init() {
+  read_data_from_persist();
+ // if (get_current_length() == 1) set_length(1,time(NULL),0,0); // this just to avoid dirty data on screen when clock initialised
   show_main_window();
+  update_main_display();
+ // update_elapsed_time_display();
+  
 }
 
 static void deinit() {
-  
+  dump_data_to_persist();
   dump_data_to_app_log();
 
 }

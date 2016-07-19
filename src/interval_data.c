@@ -56,6 +56,14 @@ int get_current_interval(void) {
   return current_interval;
 }
 
+int set_current_interval(int interval) {
+  if ((interval<1)||(interval>MAX_NUMBER_OF_INTERVALS)) return -1;
+  else current_interval = interval;
+  return 0;
+}
+
+
+
 int get_interval_first_length(int index) {
   if (!is_valid_interval(index)) return -1;
   return interval[index].first_length;    
@@ -123,5 +131,23 @@ int get_interval_pace(int index) {
   pace = get_interval_duration(index)/get_interval_lengths(index);
   
   return pace;
+  
+}
+
+void dump_intervals_to_persist(int interval_storage_key_start) {
+  
+  int number_of_intervals = get_current_interval();
+  int i;
+  
+  for (i = 1; i<=number_of_intervals; i++) persist_write_data(interval_storage_key_start+i, &interval[i], sizeof(interval[i]));
+  
+}
+
+void read_intervals_from_persist(int interval_storage_key_start)  {
+  
+  int number_of_intervals = get_current_interval();
+  int i;
+  
+   for (i = 1; i<=number_of_intervals; i++)  persist_read_data(interval_storage_key_start+i, &interval[i], sizeof(interval[i]));
   
 }
