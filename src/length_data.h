@@ -10,6 +10,5 @@ int get_length_duration(int index);
 int get_length_stroke_rate(int index);
 int get_workout_duration(void);
 int elapsed_time_in_workout(void);
-int get_workout_pace(void);
 void dump_lengths_to_persist(int length_storage_key_start);
 void read_lengths_from_persist(int length_storage_key_start);

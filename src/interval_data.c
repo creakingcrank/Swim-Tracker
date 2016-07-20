@@ -92,7 +92,20 @@ int get_interval_start_time(int index) {
 int get_interval_duration(int index) {
    if (!is_valid_interval(index)) return -1;
   return get_length_end_time(get_interval_last_length(index)) - get_length_start_time(get_interval_first_length(index));    
-}      
+}   
+
+int get_total_interval_duration(int first_interval, int last_interval) {
+  
+  int i;
+  int duration = 0;
+  
+  if (!is_valid_interval(first_interval)) return -1;
+  if (!is_valid_interval(last_interval)) return -1;
+  
+  for (i = first_interval; i<= last_interval; i++) duration = duration + get_interval_duration(i);
+  
+  return duration;
+}
       
 int get_interval_strokes(int index) {
   
@@ -132,6 +145,15 @@ int get_interval_pace(int index) {
   
   return pace;
   
+}
+
+int get_workout_pace(void) {
+  
+  int pace;
+  
+  pace = get_total_interval_duration(1,get_current_interval())/get_total_number_of_lengths();
+    
+  return pace;
 }
 
 void dump_intervals_to_persist(int interval_storage_key_start) {

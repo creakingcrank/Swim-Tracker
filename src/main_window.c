@@ -8,7 +8,7 @@
 
 #define ACCEL_STEP_MS 20         /* frequency of accelerometer checks */
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
-#define STROKE_MIN_PEAK_TIME_MS 150     /* minimim durationof peak to count it */
+#define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
 #define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid, current used in a display function only */ 
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
 #define AVE_STROKES_PER_LENGTH_FLOOR 12 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
@@ -36,11 +36,8 @@ static int main_display_setting = 0; // what we show on the main screen
 
 THINGS TO DO
 
-Check Auto Interval implementation - especially what is displayed and when.
-Add Interval count to display.
-Think about UI controls. Do you need manual interval control etc.
-Interval recording (distance, time, strokes)
-
+-- Get rid of remainign global variables
+-- Further modularization: pull out stroke/length algorithm
 
  */
 
@@ -172,7 +169,7 @@ static int get_missing_peak_window(int ap2p, int astrokes, int stroke) {
   */
   
   int base_sense_percent = 200; // this is the minimum ap2p multiplier, should never be less than 200
-  int variable_sense_percent = 200; // this is the varialbe element, falls through the legnth
+  int variable_sense_percent = 200; // this is the varialbe element, falls through the length
   int missing_peak_window;
   
   int percent_of_length_left = 0;
@@ -274,8 +271,7 @@ static void update_elapsed_time_display(){
   
   static char time_to_display[9];
   
-  time_t current_time = time(NULL);
-  int workout_elapsed_time = elapsed_time_in_workout();
+  int workout_elapsed_time = get_total_interval_duration(1, get_current_interval());
   int interval_elapsed_time = get_interval_duration(get_current_interval());
   
   
@@ -452,11 +448,13 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) { /
 
 static void long_select_click_handler(ClickRecognizerRef recognizer, void *context) {
   
+  
   // RESET!!!!! 
   if (paused) {
     set_current_length(1);
-    set_length(1,time(NULL),0,0); // clear data in current lenght - leave program to ovewrite other data
+    set_length(1,0,0,0); // clear data in current length - leave program to ovewrite other data
     set_current_interval(1);
+    set_interval(1,1,1);
     vibes_long_pulse();
     update_main_display();
     update_elapsed_time_display();
