@@ -2,13 +2,16 @@
 #include "comms.h"
 #include "length_data.h"
 #include "interval_data.h"
+#include "pool_data.h"
 
 const uint32_t storage_version_key = 1;
   const int current_storage_version = 1;
   const int current_length_storage_key = 2;
   const int current_interval_storage_key = 3;
+  const int pool_storage_key = 4;
   const int length_storage_key_start = 100;
   const int interval_storage_key_start = 1000;
+  
 
 
 void dump_data_to_app_log(void) {
@@ -37,6 +40,7 @@ void dump_data_to_persist(void) {
 
   dump_lengths_to_persist(length_storage_key_start);
   dump_intervals_to_persist(interval_storage_key_start);
+  write_pool_to_persist(pool_storage_key);
 
 }
 
@@ -48,6 +52,7 @@ void read_data_from_persist(void) {
   
     read_lengths_from_persist(length_storage_key_start);
     read_intervals_from_persist(interval_storage_key_start);
+    read_pool_from_persist(pool_storage_key);
   }
   
 }

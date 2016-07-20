@@ -3,6 +3,7 @@
 #include "length_data.h"
 #include "interval_data.h"
 #include "comms.h"
+#include "pool_data.h"
 
  #define DEBUG  /* debugging code */
 
@@ -22,12 +23,6 @@
 static int ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Avergae number of strokes per length, learned during swim
 
 static bool paused = true;  // toggled by set button
-
-static int pool_length[] = {25, 33, 50};
-static int number_of_pool_lengths = sizeof(pool_length)/sizeof(pool_length[0]);
-static int current_pool_length = 0; //pool lengths toggle by down click
-
-
 
 /*
 
@@ -304,20 +299,20 @@ static void update_elapsed_time_display(int main_display_setting){
       snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", get_total_number_of_lengths());
       break;
     case 1 :
-      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", get_total_number_of_lengths()*pool_length[current_pool_length]);
+      snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", get_total_number_of_lengths()*pool_length(0));
       break;
     case 2 :
-      pace = get_workout_pace() * 100 / pool_length[current_pool_length];
+      pace = get_workout_pace() * 100 / pool_length(0);
       snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
       break;
     case 3 :
       snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%d", get_interval_lengths(get_current_interval()));
       break;
     case 4 :
-       snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", get_interval_lengths(get_current_interval())*pool_length[current_pool_length]);
+       snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%dm", get_interval_lengths(get_current_interval())*pool_length(0));
       break;
     case 5 :
-      pace = get_interval_pace(get_current_interval()) * 100 / pool_length[current_pool_length];
+      pace = get_interval_pace(get_current_interval()) * 100 / pool_length(0);
       snprintf(lengths_text_to_display,sizeof(lengths_text_to_display),"%01d:%02d", (pace / 60) % 60, pace % 60 );
       break;
     case 6 :
@@ -378,8 +373,19 @@ void update_status_display(int main_display_setting) {
   }
   text_layer_set_text(intervals_layer,intervals_text);
   
- 
 }  
+
+static void update_pool_display(int change) {
+  
+  static char pool_text_to_display [5]; 
+  
+  snprintf(pool_text_to_display,sizeof(pool_text_to_display),"%dm", pool_length(change));
+  text_layer_set_text(pool_layer,pool_text_to_display);
+  
+  update_main_display(0);
+  
+  
+}
 
 static void timer_callback(void *data) { // main loop to collect acceleration data
  
@@ -438,14 +444,8 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //t
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle pool length
-  static char pool_text_to_display [5]; 
   
-  
-  current_pool_length++;
-  if (current_pool_length > number_of_pool_lengths-1) current_pool_length = 0;
-  
-  snprintf(pool_text_to_display,sizeof(pool_text_to_display),"%dm", pool_length[current_pool_length]);
-  text_layer_set_text(pool_layer,pool_text_to_display);
+  update_pool_display(1);
 }
 
 static void long_select_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -491,7 +491,7 @@ static void init() {
  // if (get_current_length() == 1) set_length(1,time(NULL),0,0); // this just to avoid dirty data on screen when clock initialised
   show_main_window();
   update_main_display(0);
- // update_elapsed_time_display();
+  update_pool_display(0);
   
 }
 
