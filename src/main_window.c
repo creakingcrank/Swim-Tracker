@@ -27,10 +27,7 @@ static int pool_length[] = {25, 33, 50};
 static int number_of_pool_lengths = sizeof(pool_length)/sizeof(pool_length[0]);
 static int current_pool_length = 0; //pool lengths toggle by down click
 
-static int main_display_setting = 0; // what we show on the main screen 
-                                    // 0 = number of lengths, 1 = distance covered, 2 = average pace /100m, 
-                                    // 3 =last length strole rate /min  
-                                    // toggle by up click
+
 
 /*
 
@@ -260,14 +257,13 @@ static void count_strokes(int accel, int timestamp) {
     
   }
 
-  update_main_display();
-  update_status_display();
+  update_status_display(update_main_display(0));
 
 
 
 }
 
-static void update_elapsed_time_display(){
+static void update_elapsed_time_display(int main_display_setting){
   
   static char time_to_display[9];
   
@@ -278,7 +274,6 @@ static void update_elapsed_time_display(){
   if (!paused){
     text_layer_set_background_color(stopwatch_layer, GColorWhite);
     text_layer_set_text_color(stopwatch_layer, GColorBlack);
-    app_timer_register(1000, update_elapsed_time_display, NULL );
   }
   else {
    text_layer_set_background_color(stopwatch_layer, GColorBlack);
@@ -292,11 +287,17 @@ static void update_elapsed_time_display(){
   
 }
 
- void update_main_display(void) {
+ int update_main_display(int setting_change) {
   
   static char lengths_text_to_display [8];
-  
+   
+  static int main_display_setting = 0; 
   int pace;
+   
+  main_display_setting = main_display_setting+setting_change;
+  if (main_display_setting > 6) main_display_setting = 0;
+  if (main_display_setting < 0) main_display_setting = 6;
+   
  
     switch (main_display_setting) {
     case 0 :
@@ -328,9 +329,13 @@ static void update_elapsed_time_display(){
 // Display that text:  
    
 text_layer_set_text(lengths_layer,lengths_text_to_display);
+   
+ update_elapsed_time_display(main_display_setting);   
+   
+ return main_display_setting;   
 }
 
-void update_status_display(void) {
+void update_status_display(int main_display_setting) {
   
   static char intervals_text[9];
   
@@ -372,6 +377,8 @@ void update_status_display(void) {
     break; 
   }
   text_layer_set_text(intervals_layer,intervals_text);
+  
+ 
 }  
 
 static void timer_callback(void *data) { // main loop to collect acceleration data
@@ -418,21 +425,16 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (get_total_number_of_lengths() <1 ) {
       set_length( 1, current_time, current_time, 0); // put a valid initial time in so the clock makes sense until 1st length recorded.
     }
-    update_elapsed_time_display(NULL);
     timer_callback(0);
   }
+update_main_display(0);
 }
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle main display
   
-  
-  
-  main_display_setting++;
-  if (main_display_setting > 6) main_display_setting = 0;
-  
-  
- update_status_display(); 
- update_main_display();
+
+ update_status_display(update_main_display(1)); 
+
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) { //toggle pool length
@@ -456,8 +458,7 @@ static void long_select_click_handler(ClickRecognizerRef recognizer, void *conte
     set_current_interval(1);
     set_interval(1,1,1);
     vibes_long_pulse();
-    update_main_display();
-    update_elapsed_time_display();
+    update_elapsed_time_display(update_main_display(0));
   }
 }
 
@@ -489,7 +490,7 @@ static void init() {
   read_data_from_persist();
  // if (get_current_length() == 1) set_length(1,time(NULL),0,0); // this just to avoid dirty data on screen when clock initialised
   show_main_window();
-  update_main_display();
+  update_main_display(0);
  // update_elapsed_time_display();
   
 }
