@@ -2,9 +2,8 @@
 Accelerometer based swim tracker for Pebble watches <br>
 ## Instructions<br>
 Select Button - starts or stops timer<br>
-When timer running:<br>
-Up/Down buttons manually increment or decrement length count<br>
-When timer stopped:<br>
 Up toggles display options. Down adjusts pool length<br>
+Long Press down (3sec) dumps data to APP_LOG<br>
+LOng press set (3sec) resets data
 ### Display options<br>
-Lengths / Distance / Pace (from last timer timer triggered) / Stroke rate (last length)<br>
+Lengths / Distance / Pace [workout] Length / Distance / Pace /Storke rate {last interval, with interval count) 
