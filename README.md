@@ -16,3 +16,5 @@ To manually trigger an interval change, toggle timer off/on (Double press on Sel
 Data dumped to APP_LOG in csv format<br>
 Garbage, Length no., Interval no., Start time in sec after workout start, End time in sec after workout start<br>
 Note turn times not included in length time, so to get real swimming pace in spreadsheets etc. use end of previous length to end of current length if lengths in the same interval
+### Persistent storage
+Length and interval data held in persistent storage, so OK to leave app and return later to dump data. Don't forget to reset data before next swim
