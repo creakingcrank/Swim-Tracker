@@ -9,6 +9,9 @@ Long press Set (3sec) resets data if timer stopped (buzz on reset)
 ### Display options (Up button)<br>
 [workout]Lengths -> Distance -> Pace -> [Last interval] Lengths -> Distance -> Pace -> Stroke rate<br>
 bottom centre of display shows 'w' for workout stats, 'ix' for related to last interval, number x
+###Intervals
+Interval count triggered automatically if new length not started 10 seconds after last length end<br>
+To manually trigger an interval change, toggle timer off/on (Double press on Select)
 ###Data dump
 Data dumped to APP_LOG in csv format<br>
 Garbage, Length no., Interval no., Start time in sec after workout start, End time in sec after workout start<br>
