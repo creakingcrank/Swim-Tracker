@@ -4,23 +4,12 @@
 #include "interval_data.h"
 #include "comms.h"
 #include "pool_data.h"
+#include "detect.h"
 
- #define DEBUG  /* debugging code */
+#define DEBUG  /* debugging code */
 
 #define ACCEL_STEP_MS 20         /* frequency of accelerometer checks */
-#define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
-#define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
-#define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid, current used in a display function only */ 
-#define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
-#define AVE_STROKES_PER_LENGTH_FLOOR 12 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
-#define INITIAL_AVERAGE_PEAK_TO_PEAK_TIME_MS 1000 /* a seed number for the avergae time between peaks, used for length end sensing, adapted during swimming */
 
-// define constants for missing stroke detection
-#define MAX_AVE_PEAK_TO_PEAK_TIME_MS 2500 // the initial, and maximum allowed, average time between peaks
-#define MISSING_PEAK_SENS 9/4 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
-
-
-static int ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Avergae number of strokes per length, learned during swim
 
 static bool paused = true;  // toggled by set button
 
@@ -28,16 +17,17 @@ static bool paused = true;  // toggled by set button
 
 THINGS TO DO
 
--- Get rid of remainign global variables
--- Further modularization: pull out stroke/length algorithm
+-- Comms/Appmessage
+--Keep main clear
 
  */
 
 // BEGIN AUTO-GENERATED UI CODE; DO NOT MODIFY
 static Window *s_window;
 static GFont s_res_bitham_42_bold;
-static GFont s_res_gothic_28_bold;
+static GFont s_res_gothic_28;
 static GFont s_res_bitham_30_black;
+static GFont s_res_gothic_28_bold;
 static TextLayer *lengths_layer;
 static TextLayer *strokes_layer;
 static TextLayer *stopwatch_layer;
@@ -52,20 +42,23 @@ static void initialise_ui(void) {
   #endif
   
   s_res_bitham_42_bold = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
-  s_res_gothic_28_bold = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
+  s_res_gothic_28 = fonts_get_system_font(FONT_KEY_GOTHIC_28);
   s_res_bitham_30_black = fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK);
+  s_res_gothic_28_bold = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
   // lengths_layer
   lengths_layer = text_layer_create(GRect(0, 46, 145, 42));
+  text_layer_set_background_color(lengths_layer, GColorClear);
   text_layer_set_text(lengths_layer, "0");
   text_layer_set_text_alignment(lengths_layer, GTextAlignmentCenter);
   text_layer_set_font(lengths_layer, s_res_bitham_42_bold);
   layer_add_child(window_get_root_layer(s_window), (Layer *)lengths_layer);
   
   // strokes_layer
-  strokes_layer = text_layer_create(GRect(90, 130, 53, 30));
-  text_layer_set_text(strokes_layer, "0 str");
+  strokes_layer = text_layer_create(GRect(100, 130, 43, 30));
+  text_layer_set_background_color(strokes_layer, GColorClear);
+  text_layer_set_text(strokes_layer, "---");
   text_layer_set_text_alignment(strokes_layer, GTextAlignmentRight);
-  text_layer_set_font(strokes_layer, s_res_gothic_28_bold);
+  text_layer_set_font(strokes_layer, s_res_gothic_28);
   layer_add_child(window_get_root_layer(s_window), (Layer *)strokes_layer);
   
   // stopwatch_layer
@@ -79,19 +72,22 @@ static void initialise_ui(void) {
   
   // l_text
   l_text = text_layer_create(GRect(0, 11, 145, 34));
+  text_layer_set_background_color(l_text, GColorClear);
   text_layer_set_text(l_text, "Lengths");
   text_layer_set_text_alignment(l_text, GTextAlignmentCenter);
   text_layer_set_font(l_text, s_res_bitham_30_black);
   layer_add_child(window_get_root_layer(s_window), (Layer *)l_text);
   
   // pool_layer
-  pool_layer = text_layer_create(GRect(0, 130, 40, 30));
+  pool_layer = text_layer_create(GRect(0, 130, 52, 30));
+  text_layer_set_background_color(pool_layer, GColorClear);
   text_layer_set_text(pool_layer, "25m");
   text_layer_set_font(pool_layer, s_res_gothic_28_bold);
   layer_add_child(window_get_root_layer(s_window), (Layer *)pool_layer);
   
   // intervals_layer
-  intervals_layer = text_layer_create(GRect(45, 130, 45, 30));
+  intervals_layer = text_layer_create(GRect(51, 130, 45, 30));
+  text_layer_set_background_color(intervals_layer, GColorClear);
   text_layer_set_text(intervals_layer, "w");
   text_layer_set_text_alignment(intervals_layer, GTextAlignmentCenter);
   text_layer_set_font(intervals_layer, s_res_gothic_28_bold);
@@ -113,7 +109,7 @@ double square(double num) {
   return num * num;
 }
 
-  int get_sqrt( int num ) {
+int get_sqrt( int num ) {
   // Uses Babylonian sequence to approximate root of num - this borrowed from pebble accel discs example, but converted to integer
   int approx, product, b_seq;
   int tolerance = 5; //good enough for me, since I'm working with numbers around the 1000 mark
@@ -127,136 +123,9 @@ double square(double num) {
     product = square(approx);
   }
   return approx;
-  }
-
-static bool length_end_check(int strokes) {
-  
-  bool return_value;
-  
-  if (strokes >= ave_strokes_per_length/4) { // If we've done more than 25 percent of the average strokes, increment the length
-      ave_strokes_per_length = ((ave_strokes_per_length * (get_interval_lengths(get_current_interval())-1)) + strokes) / get_interval_lengths(get_current_interval()); // update average strokes per length
-      vibes_long_pulse(); // for testing only
-      return_value = true;
-     
-  }
-  else { // else assume false alarm and reset the length
-    return_value = false;
-    #ifdef DEBUG 
-        APP_LOG(APP_LOG_LEVEL_INFO, "Insufficient strokes, restarting length");
-      #endif
-  }
-    
-    if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
-    
-return return_value;
 }
 
 
-static int get_missing_peak_window(int ap2p, int astrokes, int stroke) {
-  
-  /* 
-  function to return a time window for length end detection.
-  Window gets smaller as length progresses
-  No peak detected in the window = a length turn
-  */
-  
-  int base_sense_percent = 200; // this is the minimum ap2p multiplier, should never be less than 200
-  int variable_sense_percent = 200; // this is the varialbe element, falls through the length
-  int missing_peak_window;
-  
-  int percent_of_length_left = 0;
-  
-  
-  if (stroke < astrokes) percent_of_length_left = 100*(astrokes - stroke)/astrokes;
-  
-  missing_peak_window =  ap2p * (base_sense_percent + (variable_sense_percent*percent_of_length_left/100)) / 100;
-  
-  return missing_peak_window;
-  
-}
-
-static void count_strokes(int accel, int timestamp) {
-  
-  /*
-  
-  Here's the algorithm: 
-  
-  A stroke has two acceleration peaks in quick succession (up and down or out and back) (strokes = peaks /2)
-  We count a peak if accel stays above ACC_THRESHOLD for longer than MIN_PEAK_TIME
-  For each length, we track the average time between peaks.
-  If we don't see another peak within missing_peak_window we call the increment lengths function
-  
-  
-  */
- static int strokes = 0;     //counter for strokes recognised in current length
- static int peaks = 0;       //counter for acceleration peaks recognised, 2 peaks makes a stroke 
- static int latest_peak_to_peak_time_ms; // The time between the end of detected peaks
- static int ave_peak_to_peak_time_ms = INITIAL_AVERAGE_PEAK_TO_PEAK_TIME_MS; // Average time between acceleration peaks, learned during swim  
- static int up_time = 0;     // time current peak started, to discount short peaks from measurement
- static int last_peak_time = 0; // measure overall stroke time from beginning of 1st peak
- static bool up = false;     // have we logged an acceleration peak?
- static time_t start_of_length_time; // The time the first acceleration peak in a length is recorded 
-  
- static char strokes_text_to_display [12]; 
-   
-
-  
-  if ((accel > ACC_THRESHOLD) && (up == false)) { //identify the start of an acc peak
-      up = true;
-      up_time = timestamp;
-    }
-  
-  if ( (accel < ACC_THRESHOLD) && (up == true) )  { //identify the end of an acc peak
-    up = false;
-    
-    if (timestamp-up_time > STROKE_MIN_PEAK_TIME_MS) { // was it long enough to count as a peak?
-      
-      latest_peak_to_peak_time_ms = timestamp - last_peak_time;
-      
-      if (strokes >= ave_strokes_per_length/4) { // this used to be if (peaks > 4) - so that movement between lengths doesnt affect ap2p
-        
-        ave_peak_to_peak_time_ms = ((ave_peak_to_peak_time_ms * (peaks-1)) + latest_peak_to_peak_time_ms  )/ peaks; 
-        
-        if (ave_peak_to_peak_time_ms > MAX_AVE_PEAK_TO_PEAK_TIME_MS) ave_peak_to_peak_time_ms = MAX_AVE_PEAK_TO_PEAK_TIME_MS; // if avep2p gets too big, cap it.
-        
-        snprintf(strokes_text_to_display,sizeof(strokes_text_to_display),"%d", ave_peak_to_peak_time_ms); // this for testing...
-        text_layer_set_text(strokes_layer,strokes_text_to_display);
-      }
-      
-      last_peak_time = timestamp;
-      peaks++; //if the peak was long enough, log it
-      strokes = peaks / 2;
-      if (peaks == 1) start_of_length_time=time(NULL);
-      #ifdef DEBUG
-        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms, window %dms", peaks, 
-                timestamp-up_time, elapsed_time_in_workout(), strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms, 
-                get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes));
-      #endif
-    }
-  }    
- 
-
-   
-  // check for end of length
-  
-  if ( ((timestamp - last_peak_time) > get_missing_peak_window(ave_peak_to_peak_time_ms, ave_strokes_per_length, strokes)) && (peaks > 0) ) {
-    #ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time_in_workout());
-    #endif
-    if (length_end_check(strokes)) {
-      set_length( 0, start_of_length_time, time(NULL), strokes);
-    }
-    up = false;
-    strokes = 0;
-    peaks = 0;
-    
-  }
-
-  update_status_display(update_main_display(0));
-
-
-
-}
 
 static void update_elapsed_time_display(int main_display_setting){
   
@@ -390,10 +259,10 @@ static void update_pool_display(int change) {
 static void timer_callback(void *data) { // main loop to collect acceleration data
  
 
-static int total_acc;
-static time_t t_s;
-static uint16_t t_ms;
-static int current_time;  
+int total_acc;
+time_t t_s;
+uint16_t t_ms;
+int current_time;  
 AccelData accel = (AccelData) { .x = 0, .y = 0, .z = 0, .did_vibrate = false, .timestamp = 0 };
   
   if (paused) return; // end here if not swimming 
@@ -406,8 +275,7 @@ current_time = t_s*1000 + t_ms; //get current time in ms
 if (!accel.did_vibrate) { //ignore readings polluted by vibes (1st few always are as start sets off vibration)
   
   total_acc = get_sqrt(square(accel.x)+square(accel.y)+square(accel.z)); //calculate overall acc using pythagoras
-  count_strokes(total_acc, current_time);  // call the stroke count function
- // detect_glide(accel.x,current_time); // call the glide detection function
+  if (count_strokes(total_acc, current_time)) update_status_display(update_main_display(0));  // call the stroke count function and update display if required
 
 }
   
@@ -454,7 +322,7 @@ static void long_select_click_handler(ClickRecognizerRef recognizer, void *conte
   // RESET!!!!! 
   if (paused) {
     set_current_length(1);
-    set_length(1,0,0,0); // clear data in current length - leave program to ovewrite other data
+    set_length(1,0,0,0); // clear data in current length - leave program to overwrite other data
     set_current_interval(1);
     set_interval(1,1,1);
     vibes_long_pulse();
@@ -488,7 +356,6 @@ window_stack_push(s_window, true);
 
 static void init() {
   read_data_from_persist();
- // if (get_current_length() == 1) set_length(1,time(NULL),0,0); // this just to avoid dirty data on screen when clock initialised
   show_main_window();
   update_main_display(0);
   update_pool_display(0);
