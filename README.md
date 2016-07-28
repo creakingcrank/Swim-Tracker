@@ -18,3 +18,5 @@ Garbage, Length no., Interval no., Start time in sec after workout start, End ti
 Note turn times not included in length time, so to get real swimming pace in spreadsheets etc. use end of previous length to end of current length if lengths in the same interval
 ### Persistent storage
 Length and interval data held in persistent storage, so OK to leave app and return later to dump data. Don't forget to reset data before next swim
+### Stroke counts
+Stoke rate/counts are for the arm with the watch on it, so freestyle/backstroke swimmers may want to double these numbers to get an approximation of their stroke rates and counts if they habitually count per arm, rather for a full stroke cycle.
