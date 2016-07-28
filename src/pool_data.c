@@ -2,8 +2,8 @@
 #include "pool_data.h"
 
 static int pool[] = {25, 33, 50};
-  static int number_of_pools = sizeof(pool)/sizeof(pool[0]);
-  static int current_pool = 0; 
+static int number_of_pools = sizeof(pool)/sizeof(pool[0]);
+static int current_pool = 0; 
 
 int pool_length(int change) {
   
