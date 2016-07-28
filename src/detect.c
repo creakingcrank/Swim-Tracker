@@ -7,14 +7,12 @@
 
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
 #define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
-#define MIN_STROKES_PER_LENGTH 5 /* minimum number of recorded strokes for a length to be valid, current used in a display function only */ 
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
 #define AVE_STROKES_PER_LENGTH_FLOOR 12 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
 #define INITIAL_AVERAGE_PEAK_TO_PEAK_TIME_MS 1000 /* a seed number for the avergae time between peaks, used for length end sensing, adapted during swimming */
 
 // define constants for missing stroke detection
 #define MAX_AVE_PEAK_TO_PEAK_TIME_MS 2500 // the initial, and maximum allowed, average time between peaks
-#define MISSING_PEAK_SENS 9/4 // The number of average peak gaps we wait before a length check - integer calculation so use fractions here
 
 
 static bool length_end_check(int strokes, int ave_strokes_per_length) {
@@ -23,7 +21,9 @@ static bool length_end_check(int strokes, int ave_strokes_per_length) {
   
   if (strokes >= ave_strokes_per_length/4) { // If we've done more than 25 percent of the average strokes, increment the length
       ave_strokes_per_length = ((ave_strokes_per_length * (get_interval_lengths(get_current_interval())-1)) + strokes) / get_interval_lengths(get_current_interval()); // update average strokes per length
-      vibes_long_pulse(); // for testing only
+      #ifdef DEBUG
+        vibes_long_pulse(); // for testing only, so you can feel the length end detection event
+      #endif
       return_value = true;
      
   }
