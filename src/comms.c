@@ -62,6 +62,11 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
 		APP_LOG(APP_LOG_LEVEL_DEBUG, "Received Message: %s", tuple->value->cstring);
 	}
   
+  if (retry_timer) {
+   app_timer_cancel(retry_timer);
+   retry_delay = MIN_RETRY_DELAY;
+ }
+  
   send_length_data_to_phone();
 }
 
