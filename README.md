@@ -19,4 +19,4 @@ Note turn times not included in length time, so to get real swimming pace in spr
 ### Persistent storage
 Length and interval data held in persistent storage, so OK to leave app and return later to dump data. Don't forget to reset data before next swim
 ### Stroke counts
-Stoke rate/counts are for the arm with the watch on it, so freestyle/backstroke swimmers may want to double these numbers to get an approximation of their stroke rates and counts if they habitually count per arm, rather for a full stroke cycle.
+Stoke rate/counts are for the arm with the watch on it, so freestyle/backstroke swimmers may want to double these numbers to get an approximation of their stroke rates and counts if they habitually count per arm, rather than for a full stroke cycle.
