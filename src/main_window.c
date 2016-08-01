@@ -321,6 +321,7 @@ static void long_select_click_handler(ClickRecognizerRef recognizer, void *conte
   
   // RESET!!!!! 
   if (paused) {
+    reset_comms();
     set_current_length(1);
     set_length(1,0,0,0); // clear data in current length - leave program to overwrite other data
     set_current_interval(1);
@@ -356,6 +357,7 @@ window_stack_push(s_window, true);
 
 static void init() {
   read_data_from_persist();
+  init_comms();
   show_main_window();
   update_main_display(0);
   update_pool_display(0);

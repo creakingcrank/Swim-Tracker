@@ -4,6 +4,11 @@
 #include "interval_data.h"
 #include "pool_data.h"
 
+#define MIN_RETRY_DELAY 500
+#define MAX_RETRY_DELAY 60000
+
+
+// Definitions for Persistent storage:
 const uint32_t storage_version_key = 1;
 const int current_storage_version = 1;
 const int current_length_storage_key = 2;
@@ -11,7 +16,104 @@ const int current_interval_storage_key = 3;
 const int pool_storage_key = 4;
 const int length_storage_key_start = 100;
 const int interval_storage_key_start = 1000;
+ 
+
+// Global variables for comms
+static int length_to_send = 1;
+AppTimer *retry_timer;
+
+static int retry_delay = MIN_RETRY_DELAY; 
+
+
+// Write message to buffer & send
+void send_length_data_to_phone(void){
   
+  
+	DictionaryIterator *iter;
+  
+	if (length_to_send < get_current_length()) {
+    
+	  app_message_outbox_begin(&iter);
+    
+	  dict_write_int16(iter, MESSAGE_KEY_Length, length_to_send);
+    dict_write_int16(iter, MESSAGE_KEY_Interval, get_interval_from_length(length_to_send)); 
+    dict_write_uint32(iter, MESSAGE_KEY_Start, get_length_start_time(length_to_send));
+    dict_write_uint32(iter, MESSAGE_KEY_End, get_length_end_time(length_to_send));
+  
+	  dict_write_end(iter);
+    app_message_outbox_send();
+  }
+  else {
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Data transmission complete");
+  }
+}
+
+// Called when a message is received from PebbleKitJS
+static void in_received_handler(DictionaryIterator *received, void *context) {
+	Tuple *tuple;
+	
+	tuple = dict_find(received, MESSAGE_KEY_Status);
+	if(tuple) {
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "Received Status: %d -  I hear you JS!", (int)tuple->value->uint32); 
+	}
+	
+	tuple = dict_find(received, MESSAGE_KEY_Message);
+	if(tuple) {
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "Received Message: %s", tuple->value->cstring);
+	}
+  
+  send_length_data_to_phone();
+}
+
+static void timeout_timer_handler(void *context) {
+  send_length_data_to_phone();
+}
+
+// Called when an incoming message from PebbleKitJS is dropped
+static void in_dropped_handler(AppMessageResult reason, void *context) {	
+}
+
+// Called when PebbleKitJS does not acknowledge receipt of a message
+static void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
+  
+  if (retry_delay < MAX_RETRY_DELAY) {
+    retry_delay = retry_delay *2;
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "MESSAGE SEND FAILED, retrying in %dms",retry_delay);
+    retry_timer = app_timer_register(retry_delay,timeout_timer_handler,NULL);
+  }
+  else {
+    retry_delay = MIN_RETRY_DELAY;
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "MESSAGE SEND FAILED, giving up until next JS ready signal");
+  }
+}
+
+static void out_success_handler(DictionaryIterator *success, void *context) {
+ if (retry_timer) {
+   app_timer_cancel(retry_timer);
+   retry_delay = MIN_RETRY_DELAY;
+ }
+  length_to_send++;
+  send_length_data_to_phone();
+}
+
+ void init_comms(void) {
+
+	// Register AppMessage handlers
+	app_message_register_inbox_received(in_received_handler); 
+	app_message_register_inbox_dropped(in_dropped_handler); 
+	app_message_register_outbox_failed(out_failed_handler);
+  app_message_register_outbox_sent(out_success_handler);
+
+  // Initialize AppMessage inbox and outbox buffers with a suitable size
+  const int inbox_size = 128;
+  const int outbox_size = 128;
+	app_message_open(inbox_size, outbox_size);
+}
+
+void reset_comms(void) {
+  length_to_send = 1;
+}
+
 
 
 void dump_data_to_app_log(void) {

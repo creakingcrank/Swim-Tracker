@@ -9,7 +9,14 @@
         ],
         "displayName": "Swim Tracker",
         "enableMultiJS": true,
-        "messageKeys": [],
+        "messageKeys": [
+            "Length",
+            "Interval",
+            "Start",
+            "End",
+            "Message",
+            "Status"
+        ],
         "projectType": "native",
         "resources": {
             "media": []
@@ -19,7 +26,7 @@
             "aplite",
             "basalt"
         ],
-        "uuid": "487d2c70-3b89-4bbf-8af3-83cba1be0260",
+        "uuid": "53cf8d9e-b91f-4485-87b5-6bc5ff472a5a",
         "watchapp": {
             "watchface": false
         }

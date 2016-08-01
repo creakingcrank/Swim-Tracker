@@ -1,6 +1,8 @@
 #include <pebble.h>
 #include "length_data.h"
 #include "interval_data.h"
+#include "comms.h"
+
 
 #define DEBUG
 
@@ -57,6 +59,7 @@ int set_length( int length_number, time_t start, time_t end, int stroke)  {
   }
   else if ( (length[index].start_time-length[index-1].end_time) > INTERVAL_TRIGGER_TIME_S ) {
     set_interval(new_interval(), index, index); //start a new interval
+    send_length_data_to_phone(); // Trigger a download here
   }
   else set_interval(current_interval, get_interval_first_length(current_interval), index); // add this length to the current interval 
   

@@ -51,7 +51,6 @@ int set_interval(int int_number, int start_length, int end_length) {
 }
 
 
-
 int get_current_interval(void) {
   return current_interval;
 }
@@ -80,6 +79,16 @@ int get_interval_lengths(int index) {
    if (!is_valid_interval(index)) return -1;
   return interval[index].last_length-interval[index].first_length+1;
       
+}
+
+int get_interval_from_length(int length) {
+   
+  for (int i =1; i<=get_current_interval(); i++) {
+    if ((get_interval_first_length(i)<=length)&&(get_interval_last_length(i)>=length)){
+      return i;
+    }
+  }
+  return -1;
 }
 
 int get_interval_start_time(int index) {

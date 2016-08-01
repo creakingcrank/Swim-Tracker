@@ -7,6 +7,7 @@ int get_current_interval(void);
 int get_interval_first_length(int index);
 int get_interval_last_length(int index);
 int get_interval_lengths(int index);
+int get_interval_from_length(int length);
 int get_interval_start_time(int index);
 int get_interval_duration(int index);
 int get_total_interval_duration(int first_interval, int last_interval);
