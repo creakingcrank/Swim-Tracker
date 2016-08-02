@@ -5,6 +5,8 @@ var stt = [];
 var end = [];
 var str = [];
 
+var toComputerIndex = 0; // the next array member to send to the computer
+
 
 function restoreData () {
   
@@ -25,7 +27,7 @@ function restoreData () {
 function saveData () {
   
   var numberOfItems;
-  var maxNumberOfItems = 255;
+  var maxNumberOfItems = 255; // Only keep this number of lengths in local storage
   
   // trim older data
   numberOfItems=len.length;
@@ -93,6 +95,30 @@ Pebble.addEventListener("appmessage", function(e) {
   if (e.payload.Status == 200) {
     console.log("End of batch received");
     saveData ();
+    sendToComputer();
   }
   
 });
+
+//Send data to the computer
+function sendToComputer() {
+  
+  var i = toComputerIndex;
+  var method = 'GET';
+  var url = "http://82.69.231.230:80/swim_tracker/echo.php?" + "ln=" + len[i] + "&int="+int[i] + "&stt=" + stt[i] + "&end=" + end[i] + "&str=" + str[i];
+  var request = new XMLHttpRequest();
+
+// Specify the callback for when the request is completed
+request.onload = function() {
+  // The request was successfully completed!
+  console.log('Got response: ' + this.responseText);
+  toComputerIndex = toComputerIndex + 1;
+  if (toComputerIndex<len.length) sendToComputer();
+  else console.log("All lengths sent");
+};
+
+// Send the request
+request.open(method, url); 
+request.send(); 
+}
+
