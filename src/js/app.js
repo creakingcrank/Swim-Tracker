@@ -7,6 +7,9 @@ var str = [];
 
 var toComputerIndex = 0; // the next array member to send to the computer
 
+var userID; // Put UserID info here
+var deviceID; // Put DeviceID info here
+
 
 function restoreData () {
   
@@ -69,6 +72,8 @@ function messageFailureHandler() {
 Pebble.addEventListener("ready", function(e) {
   console.log("JS is ready!");
   restoreData ();
+  userID = Pebble.getAccountToken();
+  deviceID = Pebble.getWatchToken();
   sendMessage();
 });
 												
@@ -100,25 +105,40 @@ Pebble.addEventListener("appmessage", function(e) {
   
 });
 
+// delete a length from the array 
+function dropLength(index) {
+   
+  if ( ( index < len.length ) && ( index >= 0 ) ) {
+    len.splice(index,1);
+    int.splice(index,1);
+    stt.splice(index,1);
+    end.splice(index,1);
+    str.splice(index,1);
+}
+
 //Send data to the computer
 function sendToComputer() {
   
   var i = toComputerIndex;
   var method = 'GET';
-  var url = "http://82.69.231.230:80/swim_tracker/echo.php?" + "ln=" + len[i] + "&int="+int[i] + "&stt=" + stt[i] + "&end=" + end[i] + "&str=" + str[i];
+  var url = "http://82.69.231.230:80/swim_tracker/echo.php?" + "uid=" + userID + "&did=" +deviceID + "&len=" + len[i] + "&int=" + int[i] + "&stt=" + stt[i] + "&end=" + end[i] + "&str=" + str[i];
   var request = new XMLHttpRequest();
 
 // Specify the callback for when the request is completed
 request.onload = function() {
   // The request was successfully completed!
-  console.log('Got response: ' + this.responseText);
+  console.log('Server responded: ' + this.responseText);
   toComputerIndex = toComputerIndex + 1;
   if (toComputerIndex<len.length) sendToComputer();
-  else console.log("All lengths sent");
+  else {
+    console.log("All lengths sent");
+    Pebble.showSimpleNotificationOnPebble("Swim Tracker", "Upload complete");
+  }
 };
 
 // Send the request
 request.open(method, url); 
 request.send(); 
 }
-
+  
+  
