@@ -44,6 +44,8 @@ int set_length( int length_number, time_t start, time_t end, int stroke)  {
   length[index].end_time = end;
   length[index].strokes = stroke;
   
+ 
+  
   if (current_length > MAX_NUMBER_OF_LENGTHS) current_length = 1; // if we have reached the end of storage, roll around
   
 #ifdef DEBUG 
@@ -59,9 +61,11 @@ int set_length( int length_number, time_t start, time_t end, int stroke)  {
   }
   else if ( (length[index].start_time-length[index-1].end_time) > INTERVAL_TRIGGER_TIME_S ) {
     set_interval(new_interval(), index, index); //start a new interval
-    send_length_data_to_phone(); // Trigger a download here
+    
   }
   else set_interval(current_interval, get_interval_first_length(current_interval), index); // add this length to the current interval 
+  
+   send_length_data_to_phone(); // Trigger a download here
   
 return current_length-1; // return the total number of lengths recorded so far
 }

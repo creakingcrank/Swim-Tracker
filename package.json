@@ -15,7 +15,8 @@
             "Start",
             "End",
             "Message",
-            "Status"
+            "Status",
+            "Strokes"
         ],
         "projectType": "native",
         "resources": {
