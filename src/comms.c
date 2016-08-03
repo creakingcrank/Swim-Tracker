@@ -41,10 +41,9 @@ void send_length_data_to_phone(void){
     if (length_to_send == get_current_length()-1) {
       dict_write_int16(iter, MESSAGE_KEY_Status, 200);
     }
-    }
-  
-	  dict_write_end(iter);
+    dict_write_end(iter);
     app_message_outbox_send();
+    }
   
 }
 

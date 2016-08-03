@@ -114,7 +114,9 @@ function dropLength(index) {
     stt.splice(index,1);
     end.splice(index,1);
     str.splice(index,1);
-}
+   }
+ }
+ 
 
 //Send data to the computer
 function sendToComputer() {
