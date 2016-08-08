@@ -19,7 +19,7 @@ static bool length_end_check(int strokes, int ave_strokes_per_length) {
   
   bool return_value;
   
-  if (strokes >= ave_strokes_per_length/4) { // If we've done more than 25 percent of the average strokes, increment the length
+  if (strokes >= ave_strokes_per_length/3) { // If we've done more than 33 percent of the average strokes, increment the length
       ave_strokes_per_length = ((ave_strokes_per_length * (get_interval_lengths(get_current_interval())-1)) + strokes) / get_interval_lengths(get_current_interval()); // update average strokes per length
       #ifdef DEBUG
         vibes_long_pulse(); // for testing only, so you can feel the length end detection event
@@ -48,7 +48,7 @@ static int get_missing_peak_window(int ap2p, int astrokes, int stroke) {
   */
   
   static int base_sense_percent = 200; // this is the minimum ap2p multiplier, should never be less than 200
-  static int variable_sense_percent = 200; // this is the variable element, falls through the length
+  static int variable_sense_percent = 300; // this is the variable element, falls through the length
   int missing_peak_window;
   
   int percent_of_length_left = 0;

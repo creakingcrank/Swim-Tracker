@@ -80,7 +80,7 @@ Pebble.addEventListener("ready", function(e) {
 // Called when incoming message from the Pebble is received
 Pebble.addEventListener("appmessage", function(e) {
   
-  var last;
+  var last; //What is this for?
   
   len.push(e.payload.Length);
   int.push(e.payload.Interval);
@@ -104,7 +104,7 @@ Pebble.addEventListener("appmessage", function(e) {
   }
   
 });
-
+/*
 // delete a length from the array 
 function dropLength(index) {
    
@@ -116,26 +116,32 @@ function dropLength(index) {
     str.splice(index,1);
    }
  }
- 
+*/ 
 
 //Send data to the computer
 function sendToComputer() {
   
   var i = toComputerIndex;
   var method = 'GET';
-  var url = "http://82.69.231.230:80/swim_tracker/echo.php?" + "uid=" + userID + "&did=" +deviceID + "&len=" + len[i] + "&int=" + int[i] + "&stt=" + stt[i] + "&end=" + end[i] + "&str=" + str[i];
+  var url = "http://82.69.231.230:80/swim_tracker/store.php?" + "uid=" + userID + "&did=" +deviceID + "&len=" + len[i] + "&int=" + int[i] + "&stt=" + stt[i] + "&end=" + end[i] + "&str=" + str[i];
   var request = new XMLHttpRequest();
 
 // Specify the callback for when the request is completed
 request.onload = function() {
   // The request was successfully completed!
   console.log('Server responded: ' + this.responseText);
-  toComputerIndex = toComputerIndex + 1;
-  if (toComputerIndex<len.length) sendToComputer();
-  else {
+  //if (this.responseText == 'OK') { // just sending blind right now....
+    toComputerIndex = toComputerIndex + 1; 
+    if (toComputerIndex<len.length) {
+       console.log('Trying next length: ' + toComputerIndex);
+        sendToComputer();
+    }
+    else {
     console.log("All lengths sent");
-    Pebble.showSimpleNotificationOnPebble("Swim Tracker", "Upload complete");
-  }
+    //localStorage.clear(); Got rid of this - just going to keep 255 lengths in memory and filter server side
+    // Pebble.showSimpleNotificationOnPebble("Swim Tracker", "Upload complete"); // Got rid of this as annoying when watch connected to phone
+   }
+  //}
 };
 
 // Send the request
