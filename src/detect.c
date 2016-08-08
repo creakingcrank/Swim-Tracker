@@ -8,7 +8,7 @@
 #define ACC_THRESHOLD 1100       /* threshold for an acceleration peak - stationary wrist is about 1000 */
 #define STROKE_MIN_PEAK_TIME_MS 150     /* minimim duration of peak to count it */
 #define TRIGGER_AUTO_INTERVAL_AFTER_S 10 /* number of seconds to wait before auto interval trigger */
-#define AVE_STROKES_PER_LENGTH_FLOOR 12 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
+#define AVE_STROKES_PER_LENGTH_FLOOR 8 /* A seed number for average strokes per length, used for 1st length in interval only, after that, we use real ave */
 #define INITIAL_AVERAGE_PEAK_TO_PEAK_TIME_MS 1000 /* a seed number for the avergae time between peaks, used for length end sensing, adapted during swimming */
 
 // define constants for missing stroke detection
@@ -86,7 +86,8 @@ bool count_strokes(int accel, int timestamp) {
  static time_t start_of_length_time; // The time the first acceleration peak in a length is recorded 
   
  bool  return_value = false; //returns true if end of length identified and display needs updating
-   
+  
+ int lengths_so_far; 
 
   
   if ((accel > ACC_THRESHOLD) && (up == false)) { //identify the start of an acc peak
@@ -114,8 +115,8 @@ bool count_strokes(int accel, int timestamp) {
       strokes = peaks / 2;
       if (peaks == 1) start_of_length_time=time(NULL);
       #ifdef DEBUG
-        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms", peaks, 
-                timestamp-up_time, elapsed_time_in_workout(), strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms);
+        APP_LOG(APP_LOG_LEVEL_INFO, "Peak %d %dms recorded at %ds, %d strokes, p2p %dms, ap2p %dms, asl %d strokes", peaks, 
+                timestamp-up_time, elapsed_time_in_workout(), strokes, latest_peak_to_peak_time_ms, ave_peak_to_peak_time_ms, ave_strokes_per_length);
       #endif
     }
   }    
@@ -129,8 +130,10 @@ bool count_strokes(int accel, int timestamp) {
       APP_LOG(APP_LOG_LEVEL_INFO, "Peak missed, triggering length check at %ds", elapsed_time_in_workout());
     #endif
     if (length_end_check(strokes, ave_strokes_per_length)) {
+      lengths_so_far=get_total_number_of_lengths();
       set_length( 0, start_of_length_time, time(NULL), strokes);
       return_value = true;
+      ave_strokes_per_length = (ave_strokes_per_length*lengths_so_far+strokes)/(lengths_so_far+1); // update average strokes per length - current based on whole workout
       if (ave_strokes_per_length < AVE_STROKES_PER_LENGTH_FLOOR) ave_strokes_per_length = AVE_STROKES_PER_LENGTH_FLOOR; // Keep ave strokes per length sensible
     }
     up = false;
